@@ -133,12 +133,12 @@
 **Goal:** Build the complete frontend experience
 
 ### M4.1 - File Upload Interface
-- [ ] Create drag-and-drop upload zone
-- [ ] Add file validation UI with error messages
-- [ ] Implement preset selection interface (radio/dropdown)
+- [x] Create drag-and-drop upload zone
+- [x] Add file validation UI with error messages
+- [x] Implement preset selection interface (radio/dropdown)
 - [ ] Build optional EQ controls with presets
-- [ ] Add format selection dropdown
-- [ ] Display file size and type information
+- [x] Add format selection dropdown
+- [x] Display file size and type information
 
 **Deliverables:**
 - Complete upload interface
@@ -148,11 +148,11 @@
 ---
 
 ### M4.2 - Waveform Visualization
-- [ ] Integrate Wavesurfer.js library
-- [ ] Create before/after comparison view (side-by-side)
-- [ ] Add interactive waveform controls (zoom, pan)
-- [ ] Implement loudness analysis display (LUFS, peak, DR)
-- [ ] Build responsive waveform layout
+- [x] Integrate Wavesurfer.js library
+- [x] Create before/after comparison view (side-by-side)
+- [x] Add interactive waveform controls (zoom, pan)
+- [x] Implement loudness analysis display (LUFS, peak, DR)
+- [x] Build responsive waveform layout
 
 **Deliverables:**
 - Working waveform visualization
@@ -162,12 +162,12 @@
 ---
 
 ### M4.3 - Download & History
-- [ ] Build session-based download history list
-- [ ] Add countdown timer for file expiration (15 min)
+- [x] Build session-based download history list
+- [x] Add countdown timer for file expiration (15 min)
 - [ ] Create batch download interface
-- [ ] Implement format selection UI
-- [ ] Add "re-download" functionality
-- [ ] Build file metadata display (size, format, duration)
+- [x] Implement format selection UI
+- [x] Add "re-download" functionality
+- [x] Build file metadata display (size, format, duration)
 
 **Deliverables:**
 - Download history interface
