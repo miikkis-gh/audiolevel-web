@@ -9,11 +9,11 @@
 **Goal:** Get the development environment running with basic infrastructure
 
 ### M1.1 - Project Initialization
-- [ ] Set up monorepo structure (backend/frontend)
-- [ ] Configure Bun + TypeScript for backend
-- [ ] Initialize Svelte 5 + Vite for frontend
-- [ ] Create Docker Compose with Redis service
-- [ ] Set up Git repository with .gitignore
+- [x] Set up monorepo structure (backend/frontend)
+- [x] Configure Bun + TypeScript for backend
+- [x] Initialize Svelte 5 + Vite for frontend
+- [x] Create Docker Compose with Redis service
+- [x] Set up Git repository with .gitignore
 
 **Deliverables:**
 - Working project structure
@@ -23,11 +23,11 @@
 ---
 
 ### M1.2 - Core Backend Skeleton
-- [ ] Set up Hono server with basic routes
-- [ ] Configure BullMQ with Redis connection
-- [ ] Implement file upload endpoint with validation
-- [ ] Add Zod schemas for request validation
-- [ ] Create basic health check endpoint
+- [x] Set up Hono server with basic routes
+- [x] Configure BullMQ with Redis connection
+- [x] Implement file upload endpoint with validation
+- [x] Add Zod schemas for request validation
+- [x] Create basic health check endpoint
 
 **Deliverables:**
 - Running Hono server
@@ -37,11 +37,11 @@
 ---
 
 ### M1.3 - Development Tooling
-- [ ] Configure hot reload for both frontend/backend
-- [ ] Set up environment variable management
-- [ ] Create basic error handling middleware
-- [ ] Add logging infrastructure (console + file)
-- [ ] Configure CORS for local development
+- [x] Configure hot reload for both frontend/backend
+- [x] Set up environment variable management
+- [x] Create basic error handling middleware
+- [x] Add logging infrastructure (console + file)
+- [x] Configure CORS for local development
 
 **Deliverables:**
 - Development environment with hot reload
