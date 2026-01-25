@@ -4,6 +4,7 @@
   import ProgressIndicator from './lib/components/ProgressIndicator.svelte';
   import ConnectionStatus from './lib/components/ConnectionStatus.svelte';
   import DownloadHistory from './lib/components/DownloadHistory.svelte';
+  import RateLimitBanner from './lib/components/RateLimitBanner.svelte';
   import type { HistoryItem } from './lib/components/DownloadHistory.svelte';
   import {
     connectWebSocket,
@@ -12,7 +13,14 @@
     clearJobData,
     jobResults,
   } from './stores/websocket';
-  import { fetchPresets, uploadFile, type Preset } from './stores/api';
+  import {
+    fetchPresets,
+    uploadFile,
+    fetchRateLimitStatus,
+    type Preset,
+    type RateLimitStatus,
+    type ApiError,
+  } from './stores/api';
   import {
     downloadHistory,
     addToHistory,
@@ -27,18 +35,35 @@
   let uploadError = $state<string | null>(null);
   let activeJobs = $state<Array<{ id: string; fileName: string; preset: string; outputFormat: string }>>([]);
   let cleanupInterval: ReturnType<typeof setInterval>;
+  let rateLimitStatus = $state<RateLimitStatus | null>(null);
+  let rateLimitError = $state<string | null>(null);
 
   // API URL for downloads
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+  // Function to refresh rate limit status
+  async function refreshRateLimitStatus() {
+    try {
+      rateLimitStatus = await fetchRateLimitStatus();
+      rateLimitError = null;
+    } catch (err) {
+      rateLimitError = 'Unable to check upload limits';
+      console.error('Failed to fetch rate limit status:', err);
+    }
+  }
 
   // Load presets on mount
   onMount(async () => {
     // Connect WebSocket
     connectWebSocket();
 
-    // Fetch presets
+    // Fetch presets and rate limit status in parallel
     try {
-      presets = await fetchPresets();
+      const [presetsResult] = await Promise.all([
+        fetchPresets(),
+        refreshRateLimitStatus(),
+      ]);
+      presets = presetsResult;
       if (presets.length > 0) {
         selectedPreset = presets[0].id;
       }
@@ -81,6 +106,12 @@
   async function handleFileSelect(file: File, outputFormat: string) {
     if (isUploading) return;
 
+    // Check if rate limited
+    if (rateLimitStatus?.remaining === 0) {
+      uploadError = 'Upload limit reached. Please wait for the limit to reset.';
+      return;
+    }
+
     isUploading = true;
     uploadError = null;
 
@@ -98,8 +129,20 @@
         },
       ];
       subscribeToJob(result.jobId);
+
+      // Refresh rate limit status after successful upload
+      await refreshRateLimitStatus();
     } catch (err) {
-      uploadError = err instanceof Error ? err.message : 'Upload failed';
+      const apiError = err as ApiError;
+      if (apiError.status === 429) {
+        uploadError = apiError.retryAfter
+          ? `Upload limit reached. Please try again in ${Math.ceil(apiError.retryAfter / 60)} minute${apiError.retryAfter > 60 ? 's' : ''}.`
+          : 'Upload limit reached. Please try again later.';
+        // Refresh status to update the banner
+        await refreshRateLimitStatus();
+      } else {
+        uploadError = err instanceof Error ? err.message : 'Upload failed';
+      }
     } finally {
       isUploading = false;
     }
@@ -147,6 +190,17 @@
       </p>
     </div>
 
+    <!-- Rate limit banner -->
+    {#if rateLimitStatus?.remaining === 0 || (rateLimitStatus && rateLimitStatus.remaining <= 3) || rateLimitError}
+      <div class="mb-4">
+        <RateLimitBanner
+          status={rateLimitStatus}
+          error={rateLimitError}
+          onRefresh={refreshRateLimitStatus}
+        />
+      </div>
+    {/if}
+
     <!-- Main card -->
     <div class="bg-white rounded-lg shadow-lg p-6 md:p-8 mb-6">
       <!-- File upload -->
@@ -155,7 +209,7 @@
         {selectedPreset}
         {presets}
         onPresetChange={handlePresetChange}
-        disabled={isUploading}
+        disabled={isUploading || rateLimitStatus?.remaining === 0}
       />
 
       <!-- Upload error -->
@@ -206,9 +260,16 @@
     {/if}
 
     <!-- Footer -->
-    <div class="flex items-center justify-between text-xs text-gray-400">
-      <p>Files are automatically deleted after 15 minutes. No account required.</p>
-      <ConnectionStatus />
+    <div class="flex flex-col gap-2 text-xs text-gray-400">
+      <div class="flex items-center justify-between">
+        <p>Files are automatically deleted after 15 minutes. No account required.</p>
+        <ConnectionStatus />
+      </div>
+      {#if rateLimitStatus && rateLimitStatus.remaining > 3}
+        <div class="flex justify-center">
+          <RateLimitBanner status={rateLimitStatus} />
+        </div>
+      {/if}
     </div>
   </div>
 </main>

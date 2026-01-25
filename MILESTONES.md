@@ -180,44 +180,45 @@
 **Goal:** Harden the application for production use
 
 ### M5.1 - Rate Limiting & Validation
-- [ ] Implement IP-based rate limiting (10 uploads/hour)
-- [ ] Add server-side file type verification (magic bytes)
-- [ ] Enforce 100MB file size limits
-- [ ] Create abuse detection patterns
-- [ ] Build rate limit feedback UI
+- [x] Implement IP-based rate limiting (10 uploads/hour)
+- [x] Add server-side file type verification (magic bytes)
+- [x] Enforce 100MB file size limits
+- [x] Create abuse detection patterns
+- [x] Build rate limit feedback UI
 
 **Deliverables:**
-- IP-based rate limiter
-- Server-side validation
-- Abuse protection
+- IP-based rate limiter (Redis sliding window)
+- Server-side validation with magic bytes
+- Rate limit banner UI with remaining uploads
 
 ---
 
 ### M5.2 - File Management System
-- [ ] Build automated cleanup with node-cron (every 5 min)
-- [ ] Implement 15-minute file retention policy
-- [ ] Create separate upload/output directories
-- [ ] Add disk space monitoring
-- [ ] Build orphaned file cleanup
+- [x] Build automated cleanup with node-cron (every 5 min)
+- [x] Implement 15-minute file retention policy
+- [x] Create separate upload/output directories
+- [x] Add disk space monitoring
+- [x] Build orphaned file cleanup
 
 **Deliverables:**
-- Automated cleanup system
+- Automated cleanup system (age-based and orphan cleanup)
 - File retention enforcement
-- Disk monitoring
+- Disk monitoring with thresholds (warning at 80%, critical at 90%)
 
 ---
 
 ### M5.3 - Resource Protection
-- [ ] Configure FFmpeg resource limits (CPU/memory)
-- [ ] Add concurrent job limits (configurable)
-- [ ] Implement queue priority system
-- [ ] Create graceful degradation for overload
-- [ ] Add queue depth monitoring
+- [x] Configure FFmpeg resource limits (CPU/memory)
+- [x] Add concurrent job limits (configurable)
+- [x] Implement queue priority system
+- [x] Create graceful degradation for overload
+- [x] Add queue depth monitoring
 
 **Deliverables:**
-- Resource-limited processing
-- Queue management system
-- Overload protection
+- Resource-limited processing (nice/ionice, thread limits)
+- Queue management with file-size-based priority
+- Graceful degradation (reject large files when busy, block all when overloaded)
+- Comprehensive health monitoring with alerts
 
 ---
 

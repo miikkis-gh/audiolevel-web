@@ -4,20 +4,55 @@ import { join } from 'path';
 import { mkdir, writeFile } from 'fs/promises';
 import { fileTypeFromBuffer } from 'file-type';
 import { uploadRequestSchema, ALLOWED_MIME_TYPES, type Preset } from '../schemas/upload';
-import { addAudioJob, getJobStatus } from '../services/queue';
+import { addAudioJob, getJobStatus, canAcceptJob, getQueueStatus } from '../services/queue';
 import { AppError } from '../middleware/errorHandler';
+import { uploadRateLimiter } from '../middleware/rateLimit';
+import { getRateLimitStatus, getClientIp } from '../services/rateLimit';
+import { hasEnoughSpace } from '../services/diskMonitor';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
 const upload = new Hono();
 
 const ALLOWED_EXTENSIONS = new Set(['.wav', '.mp3', '.flac', '.aac', '.ogg', '.m4a']);
+const ALLOWED_OUTPUT_FORMATS = new Set(['wav', 'mp3', 'flac', 'aac', 'ogg']);
+
+// Rate limit status endpoint (no rate limiting applied)
+upload.get('/rate-limit', async (c) => {
+  const clientIp = getClientIp(c.req.raw.headers);
+  const status = await getRateLimitStatus(clientIp);
+
+  return c.json({
+    limit: 10,
+    remaining: status.remaining,
+    used: status.count,
+    resetAt: status.resetAt,
+    windowMs: 60 * 60 * 1000,
+  });
+});
+
+// Queue status endpoint (for frontend graceful degradation)
+upload.get('/queue-status', async (c) => {
+  const status = await getQueueStatus();
+
+  return c.json({
+    status: status.status,
+    acceptingJobs: status.acceptingJobs,
+    estimatedWaitTime: status.estimatedWaitTime,
+    waiting: status.waiting,
+    active: status.active,
+  });
+});
+
+// Apply rate limiting to upload endpoint
+upload.use('/', uploadRateLimiter);
 
 upload.post('/', async (c) => {
   const body = await c.req.parseBody();
 
   const file = body['file'];
   const presetParam = body['preset'];
+  const outputFormatParam = body['outputFormat'];
 
   if (!file || !(file instanceof File)) {
     throw new AppError(400, 'No file provided', 'NO_FILE');
@@ -28,9 +63,26 @@ upload.post('/', async (c) => {
     throw new AppError(400, `File too large. Maximum size is ${env.MAX_FILE_SIZE / 1024 / 1024}MB`, 'FILE_TOO_LARGE');
   }
 
+  // Check disk space
+  const diskCheck = await hasEnoughSpace(file.size);
+  if (!diskCheck.allowed) {
+    throw new AppError(503, diskCheck.reason || 'Insufficient storage', 'INSUFFICIENT_STORAGE');
+  }
+
+  // Check queue capacity (graceful degradation)
+  const queueCheck = await canAcceptJob(file.size);
+  if (!queueCheck.allowed) {
+    throw new AppError(503, queueCheck.reason || 'Server busy', 'QUEUE_OVERLOADED');
+  }
+
   // Validate preset
   const presetResult = uploadRequestSchema.safeParse({ preset: presetParam });
   const preset: Preset = presetResult.success ? presetResult.data.preset : 'podcast';
+
+  // Validate output format
+  const outputFormat = typeof outputFormatParam === 'string' && ALLOWED_OUTPUT_FORMATS.has(outputFormatParam)
+    ? outputFormatParam
+    : 'wav';
 
   // Check file extension
   const ext = '.' + (file.name.split('.').pop()?.toLowerCase() || '');
@@ -50,7 +102,7 @@ upload.post('/', async (c) => {
   // Generate job ID and save file
   const jobId = nanoid(12);
   const inputFilename = `${jobId}-input${ext}`;
-  const outputFilename = `${jobId}-output${ext}`;
+  const outputFilename = `${jobId}-output.${outputFormat}`;
   const inputPath = join(env.UPLOAD_DIR, inputFilename);
   const outputPath = join(env.OUTPUT_DIR, outputFilename);
 
@@ -61,22 +113,25 @@ upload.post('/', async (c) => {
   // Save uploaded file
   await writeFile(inputPath, buffer);
 
-  logger.info({ jobId, filename: file.name, size: file.size, preset }, 'File uploaded');
+  logger.info({ jobId, filename: file.name, size: file.size, preset, outputFormat }, 'File uploaded');
 
-  // Add job to queue
+  // Add job to queue with file size for priority calculation
   await addAudioJob({
     jobId,
     inputPath,
     outputPath,
     preset,
     originalName: file.name,
+    fileSize: file.size,
   });
 
   return c.json({
     jobId,
     status: 'queued',
     preset,
+    outputFormat,
     originalName: file.name,
+    estimatedWaitTime: queueCheck.estimatedWaitTime,
   }, 201);
 });
 
