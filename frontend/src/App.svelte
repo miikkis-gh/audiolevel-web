@@ -3,20 +3,33 @@
   import FileUpload from './lib/components/FileUpload.svelte';
   import ProgressIndicator from './lib/components/ProgressIndicator.svelte';
   import ConnectionStatus from './lib/components/ConnectionStatus.svelte';
+  import DownloadHistory from './lib/components/DownloadHistory.svelte';
+  import type { HistoryItem } from './lib/components/DownloadHistory.svelte';
   import {
     connectWebSocket,
     disconnectWebSocket,
     subscribeToJob,
     clearJobData,
+    jobResults,
   } from './stores/websocket';
   import { fetchPresets, uploadFile, type Preset } from './stores/api';
+  import {
+    downloadHistory,
+    addToHistory,
+    removeFromHistory,
+    cleanupExpired,
+  } from './stores/history';
 
   // State
   let presets = $state<Preset[]>([]);
   let selectedPreset = $state('podcast');
   let isUploading = $state(false);
   let uploadError = $state<string | null>(null);
-  let activeJobs = $state<Array<{ id: string; fileName: string }>>([]);
+  let activeJobs = $state<Array<{ id: string; fileName: string; preset: string; outputFormat: string }>>([]);
+  let cleanupInterval: ReturnType<typeof setInterval>;
+
+  // API URL for downloads
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
   // Load presets on mount
   onMount(async () => {
@@ -32,23 +45,58 @@
     } catch (err) {
       console.error('Failed to fetch presets:', err);
     }
+
+    // Clean up expired items periodically
+    cleanupExpired();
+    cleanupInterval = setInterval(cleanupExpired, 60000); // Every minute
   });
 
   onDestroy(() => {
     disconnectWebSocket();
+    if (cleanupInterval) {
+      clearInterval(cleanupInterval);
+    }
   });
 
-  async function handleFileSelect(file: File) {
+  // Watch for job completions to add to history
+  $effect(() => {
+    const results = $jobResults;
+    for (const [jobId, result] of results) {
+      if (result.success && result.downloadUrl) {
+        const job = activeJobs.find((j) => j.id === jobId);
+        if (job) {
+          // Add to download history
+          addToHistory({
+            id: jobId,
+            fileName: job.fileName.replace(/\.[^.]+$/, `.${job.outputFormat}`),
+            preset: job.preset,
+            outputFormat: job.outputFormat,
+            downloadUrl: result.downloadUrl,
+          });
+        }
+      }
+    }
+  });
+
+  async function handleFileSelect(file: File, outputFormat: string) {
     if (isUploading) return;
 
     isUploading = true;
     uploadError = null;
 
     try {
-      const result = await uploadFile(file, selectedPreset);
+      const result = await uploadFile(file, selectedPreset, outputFormat);
 
       // Add to active jobs and subscribe to WebSocket updates
-      activeJobs = [...activeJobs, { id: result.jobId, fileName: file.name }];
+      activeJobs = [
+        ...activeJobs,
+        {
+          id: result.jobId,
+          fileName: file.name,
+          preset: selectedPreset,
+          outputFormat,
+        },
+      ];
       subscribeToJob(result.jobId);
     } catch (err) {
       uploadError = err instanceof Error ? err.message : 'Upload failed';
@@ -61,11 +109,10 @@
     selectedPreset = preset;
   }
 
-  function handleDownload(url: string) {
-    // Open download in new tab/trigger download
+  function handleDownload(url: string, fileName?: string) {
     const link = document.createElement('a');
-    link.href = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${url}`;
-    link.download = '';
+    link.href = `${API_URL}${url}`;
+    link.download = fileName || '';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -76,13 +123,17 @@
     activeJobs = activeJobs.filter((job) => job.id !== jobId);
   }
 
-  async function handleRetry(jobId: string, fileName: string) {
-    // Clear the failed job
+  function handleRetry(jobId: string) {
     handleClearJob(jobId);
-
-    // Note: In a real implementation, you'd need to re-upload the file
-    // For now, we just show an error message
     uploadError = 'Please re-upload the file to retry.';
+  }
+
+  function handleHistoryDownload(url: string, fileName: string) {
+    handleDownload(url, fileName);
+  }
+
+  function handleHistoryRemove(id: string) {
+    removeFromHistory(id);
   }
 </script>
 
@@ -134,11 +185,23 @@
           <ProgressIndicator
             jobId={job.id}
             fileName={job.fileName}
-            onDownload={handleDownload}
-            onRetry={() => handleRetry(job.id, job.fileName)}
+            onDownload={(url) => handleDownload(url, job.fileName)}
+            onRetry={() => handleRetry(job.id)}
             onCancel={() => handleClearJob(job.id)}
           />
         {/each}
+      </div>
+    {/if}
+
+    <!-- Download History -->
+    {#if $downloadHistory.length > 0}
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Recent Downloads</h2>
+        <DownloadHistory
+          items={$downloadHistory}
+          onDownload={handleHistoryDownload}
+          onRemove={handleHistoryRemove}
+        />
       </div>
     {/if}
 

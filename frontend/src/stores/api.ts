@@ -37,10 +37,11 @@ export async function fetchPresets(): Promise<Preset[]> {
   return data.presets;
 }
 
-export async function uploadFile(file: File, preset: string): Promise<UploadResponse> {
+export async function uploadFile(file: File, preset: string, outputFormat: string = 'wav'): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('preset', preset);
+  formData.append('outputFormat', outputFormat);
 
   const response = await fetch(`${API_URL}/api/upload`, {
     method: 'POST',
