@@ -8,6 +8,16 @@ import { getRedisClient, closeRedis } from './services/redis';
 import { closeQueue } from './services/queue';
 import { startAudioWorker, stopAudioWorker } from './workers/audioWorker';
 import { startCleanupJob, stopCleanupJob } from './services/cleanup';
+import {
+  handleOpen,
+  handleMessage,
+  handleClose,
+  handleError,
+  startHeartbeat,
+  stopHeartbeat,
+  closeAllConnections,
+  type WebSocketData,
+} from './websocket/handler';
 import healthRoutes from './routes/health';
 import presetsRoutes from './routes/presets';
 import uploadRoutes from './routes/upload';
@@ -51,6 +61,7 @@ app.get('/', (c) => {
       upload: '/api/upload',
       jobStatus: '/api/job/:id',
       download: '/api/job/:id/download',
+      websocket: '/ws',
     },
   });
 });
@@ -66,12 +77,17 @@ async function initializeServices() {
   // Start the file cleanup job
   startCleanupJob();
 
+  // Start WebSocket heartbeat monitoring
+  startHeartbeat();
+
   logger.info({ port: env.PORT, env: env.NODE_ENV }, 'AudioLevel server initialized');
 }
 
 // Graceful shutdown
 const shutdown = async (signal: string) => {
   logger.info({ signal }, 'Shutdown signal received');
+  stopHeartbeat();
+  closeAllConnections();
   stopCleanupJob();
   await stopAudioWorker();
   await closeQueue();
@@ -88,7 +104,22 @@ initializeServices().catch((err) => {
   process.exit(1);
 });
 
+// Export server configuration with WebSocket support
 export default {
   port: env.PORT,
   fetch: app.fetch,
+  websocket: {
+    open(ws: import('bun').ServerWebSocket<WebSocketData>) {
+      handleOpen(ws);
+    },
+    message(ws: import('bun').ServerWebSocket<WebSocketData>, message: string | Buffer) {
+      handleMessage(ws, message);
+    },
+    close(ws: import('bun').ServerWebSocket<WebSocketData>) {
+      handleClose(ws);
+    },
+    error(ws: import('bun').ServerWebSocket<WebSocketData>, error: Error) {
+      handleError(ws, error);
+    },
+  },
 };
