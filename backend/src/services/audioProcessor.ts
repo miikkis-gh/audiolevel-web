@@ -12,6 +12,15 @@ import {
   type LoudnessAnalysis,
   type AudioMetadata,
 } from '../utils/ffmpeg';
+import {
+  getResourceLimitedCommand,
+  getResourceLimitEnv,
+  getAdaptiveResourceLimits,
+  incrementActiveProcesses,
+  decrementActiveProcesses,
+  type ResourceLimits,
+  DEFAULT_RESOURCE_LIMITS,
+} from '../utils/resourceLimiter';
 import type { Preset } from '../schemas/upload';
 
 export interface ProcessingResult {
@@ -36,23 +45,38 @@ async function executeWithTimeout(
   command: string,
   args: string[],
   timeoutMs: number,
-  onOutput?: (data: string) => void
+  onOutput?: (data: string) => void,
+  useResourceLimits: boolean = false
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const log = createChildLogger({ command, args: args.slice(0, 3) });
+
+  // Get adaptive resource limits based on system load
+  const limits = useResourceLimits ? await getAdaptiveResourceLimits() : DEFAULT_RESOURCE_LIMITS;
+
+  // Apply resource-limited wrapper (nice/ionice on Linux)
+  const wrapped = useResourceLimits
+    ? getResourceLimitedCommand(command, args, limits)
+    : { command, args };
+
+  // Get environment variables for resource limiting
+  const resourceEnv = getResourceLimitEnv(limits);
 
   return new Promise((resolve, reject) => {
     let stdout = '';
     let stderr = '';
     let killed = false;
 
+    if (useResourceLimits) {
+      incrementActiveProcesses();
+    }
+
     const proc = spawn({
-      cmd: [command, ...args],
+      cmd: [wrapped.command, ...wrapped.args],
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
         ...process.env,
-        // Resource limits via environment (for ffmpeg)
-        FFREPORT: 'level=32', // Reduce logging verbosity
+        ...resourceEnv,
       },
     });
 
@@ -60,6 +84,9 @@ async function executeWithTimeout(
     const timeoutId = setTimeout(() => {
       killed = true;
       proc.kill();
+      if (useResourceLimits) {
+        decrementActiveProcesses();
+      }
       reject(new Error(`Process timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
@@ -100,11 +127,17 @@ async function executeWithTimeout(
     // Wait for process to complete
     proc.exited.then((exitCode) => {
       clearTimeout(timeoutId);
+      if (useResourceLimits) {
+        decrementActiveProcesses();
+      }
       if (!killed) {
         resolve({ stdout, stderr, exitCode });
       }
     }).catch((err) => {
       clearTimeout(timeoutId);
+      if (useResourceLimits) {
+        decrementActiveProcesses();
+      }
       if (!killed) {
         reject(err);
       }
@@ -200,12 +233,12 @@ export async function normalizeAudio(
       log.info({ inputAnalysis }, 'Input loudness analysis complete');
     }
 
-    // Run normalization
+    // Run normalization with resource limits
     callbacks?.onStage?.('Normalizing audio...');
     callbacks?.onProgress?.(20);
 
     const { command, args } = buildNormalizeCommand(options);
-    log.info({ command, args }, 'Starting normalization');
+    log.info({ command, args }, 'Starting normalization with resource limits');
 
     let lastProgress = 20;
     const { stdout, stderr, exitCode } = await executeWithTimeout(
@@ -220,7 +253,8 @@ export async function normalizeAudio(
           lastProgress = mappedProgress;
           callbacks?.onProgress?.(mappedProgress);
         }
-      }
+      },
+      true // Enable resource limits for main processing
     );
 
     if (exitCode !== 0) {

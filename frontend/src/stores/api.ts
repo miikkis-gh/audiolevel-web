@@ -28,6 +28,20 @@ export interface JobStatus {
   error?: string;
 }
 
+export interface RateLimitStatus {
+  limit: number;
+  remaining: number;
+  used: number;
+  resetAt: number;
+  windowMs: number;
+}
+
+export interface ApiError extends Error {
+  code?: string;
+  status?: number;
+  retryAfter?: number;
+}
+
 export async function fetchPresets(): Promise<Preset[]> {
   const response = await fetch(`${API_URL}/api/presets`);
   if (!response.ok) {
@@ -35,6 +49,14 @@ export async function fetchPresets(): Promise<Preset[]> {
   }
   const data = await response.json();
   return data.presets;
+}
+
+export async function fetchRateLimitStatus(): Promise<RateLimitStatus> {
+  const response = await fetch(`${API_URL}/api/upload/rate-limit`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch rate limit status');
+  }
+  return response.json();
 }
 
 export async function uploadFile(file: File, preset: string, outputFormat: string = 'wav'): Promise<UploadResponse> {
@@ -49,8 +71,18 @@ export async function uploadFile(file: File, preset: string, outputFormat: strin
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Upload failed');
+    const errorData = await response.json();
+    const error = new Error(errorData.error || 'Upload failed') as ApiError;
+    error.code = errorData.code;
+    error.status = response.status;
+
+    // Handle rate limit error
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('retry-after');
+      error.retryAfter = retryAfter ? parseInt(retryAfter, 10) : undefined;
+    }
+
+    throw error;
   }
 
   return response.json();
