@@ -54,11 +54,11 @@
 **Goal:** Build the core FFmpeg normalization pipeline
 
 ### M2.1 - FFmpeg Integration
-- [ ] Verify FFmpeg + ffmpeg-normalize installation
-- [ ] Create audio processing service wrapper
-- [ ] Implement sandboxed execution with resource limits
-- [ ] Add processing timeout handling (5 min)
-- [ ] Build FFmpeg command builder utility
+- [x] Verify FFmpeg + ffmpeg-normalize installation
+- [x] Create audio processing service wrapper
+- [x] Implement sandboxed execution with resource limits
+- [x] Add processing timeout handling (5 min)
+- [x] Build FFmpeg command builder utility
 
 **Deliverables:**
 - Working FFmpeg wrapper service
@@ -68,14 +68,14 @@
 ---
 
 ### M2.2 - Normalization Presets
-- [ ] Implement Podcast preset (-16 LUFS)
-- [ ] Implement Broadcast preset (-23 LUFS)
-- [ ] Implement YouTube preset (-14 LUFS)
-- [ ] Implement Streaming preset (-14 LUFS with true peak -1dB)
-- [ ] Implement Mastering preset (-9 LUFS)
-- [ ] Implement Audiobook preset (-18 LUFS)
-- [ ] Add loudness analysis (LUFS, true peak, dynamic range)
-- [ ] Create format conversion with quality presets
+- [x] Implement Podcast preset (-16 LUFS)
+- [x] Implement Broadcast preset (-23 LUFS)
+- [x] Implement YouTube preset (-14 LUFS)
+- [x] Implement Streaming preset (-14 LUFS with true peak -1dB)
+- [x] Implement Mastering preset (-9 LUFS)
+- [x] Implement Audiobook preset (-18 LUFS)
+- [x] Add loudness analysis (LUFS, true peak, dynamic range)
+- [x] Create format conversion with quality presets
 
 **Deliverables:**
 - 6 working normalization presets
@@ -85,11 +85,11 @@
 ---
 
 ### M2.3 - Job Queue System
-- [ ] Connect BullMQ to processing service
-- [ ] Implement job status tracking (queued, processing, completed, failed)
-- [ ] Add error recovery and retry logic (max 3 retries)
-- [ ] Create job progress reporting (0-100%)
-- [ ] Build job result storage mechanism
+- [x] Connect BullMQ to processing service
+- [x] Implement job status tracking (queued, processing, completed, failed)
+- [x] Add error recovery and retry logic (max 3 retries)
+- [x] Create job progress reporting (0-100%)
+- [x] Build job result storage mechanism
 
 **Deliverables:**
 - Functional job queue

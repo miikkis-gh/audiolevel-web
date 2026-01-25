@@ -6,6 +6,8 @@ import { logger } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import { getRedisClient, closeRedis } from './services/redis';
 import { closeQueue } from './services/queue';
+import { startAudioWorker, stopAudioWorker } from './workers/audioWorker';
+import { startCleanupJob, stopCleanupJob } from './services/cleanup';
 import healthRoutes from './routes/health';
 import presetsRoutes from './routes/presets';
 import uploadRoutes from './routes/upload';
@@ -53,12 +55,25 @@ app.get('/', (c) => {
   });
 });
 
-// Initialize Redis connection
-getRedisClient();
+// Initialize services
+async function initializeServices() {
+  // Initialize Redis connection
+  getRedisClient();
+
+  // Start the audio processing worker
+  await startAudioWorker();
+
+  // Start the file cleanup job
+  startCleanupJob();
+
+  logger.info({ port: env.PORT, env: env.NODE_ENV }, 'AudioLevel server initialized');
+}
 
 // Graceful shutdown
 const shutdown = async (signal: string) => {
   logger.info({ signal }, 'Shutdown signal received');
+  stopCleanupJob();
+  await stopAudioWorker();
   await closeQueue();
   await closeRedis();
   process.exit(0);
@@ -67,8 +82,11 @@ const shutdown = async (signal: string) => {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-// Start server
-logger.info({ port: env.PORT, env: env.NODE_ENV }, 'Starting AudioLevel server');
+// Start server and services
+initializeServices().catch((err) => {
+  logger.error({ err }, 'Failed to initialize services');
+  process.exit(1);
+});
 
 export default {
   port: env.PORT,
