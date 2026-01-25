@@ -3,6 +3,7 @@ import { getRedisClient } from '../services/redis';
 import { normalizeAudio, verifyDependencies } from '../services/audioProcessor';
 import { env } from '../config/env';
 import { logger, createChildLogger } from '../utils/logger';
+import { emitJobProgress, emitJobComplete, emitJobError } from '../websocket/events';
 import type { AudioJobData, AudioJobResult } from '../services/queue';
 
 let audioWorker: Worker<AudioJobData, AudioJobResult> | null = null;
@@ -120,6 +121,14 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
       },
       'Job completed'
     );
+
+    // Emit WebSocket event for completion
+    if (result.success && result.outputPath) {
+      emitJobComplete(job.data.jobId, {
+        downloadUrl: `/api/job/${job.data.jobId}/download`,
+        duration: result.duration,
+      });
+    }
   });
 
   audioWorker.on('failed', (job, err) => {
@@ -131,10 +140,19 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
       },
       'Job failed'
     );
+
+    // Emit WebSocket event for error
+    if (job) {
+      emitJobError(job.data.jobId, err.message, 'PROCESSING_FAILED');
+    }
   });
 
   audioWorker.on('progress', (job, progress) => {
     logger.debug({ jobId: job.data.jobId, progress }, 'Job progress');
+
+    // Emit WebSocket event for progress
+    const percent = typeof progress === 'number' ? progress : (progress as any).percent || 0;
+    emitJobProgress(job.data.jobId, percent);
   });
 
   audioWorker.on('error', (err) => {

@@ -102,11 +102,11 @@
 **Goal:** Enable live progress updates and status monitoring
 
 ### M3.1 - WebSocket Implementation
-- [ ] Set up WebSocket server in Hono
-- [ ] Create session-based connection management
-- [ ] Implement progress event broadcasting
-- [ ] Add connection health monitoring (heartbeat)
-- [ ] Build event message protocol
+- [x] Set up WebSocket server in Hono
+- [x] Create session-based connection management
+- [x] Implement progress event broadcasting
+- [x] Add connection health monitoring (heartbeat)
+- [x] Build event message protocol
 
 **Deliverables:**
 - Working WebSocket server
@@ -116,11 +116,11 @@
 ---
 
 ### M3.2 - Frontend WebSocket Client
-- [ ] Build WebSocket connection handler
-- [ ] Create reactive progress state management
-- [ ] Implement reconnection logic (exponential backoff)
-- [ ] Add visual progress indicators
-- [ ] Handle connection errors gracefully
+- [x] Build WebSocket connection handler
+- [x] Create reactive progress state management
+- [x] Implement reconnection logic (exponential backoff)
+- [x] Add visual progress indicators
+- [x] Handle connection errors gracefully
 
 **Deliverables:**
 - Frontend WebSocket client
