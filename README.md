@@ -1,15 +1,13 @@
 # AudioLevel
 
 ```
-    ╔══════════════════════════════════════════════════════════════╗
-    ║   █████╗ ██╗   ██╗██████╗ ██╗ ██████╗ ██╗     ███████╗██╗   ║
-    ║  ██╔══██╗██║   ██║██╔══██╗██║██╔═══██╗██║     ██╔════╝██║   ║
-    ║  ███████║██║   ██║██║  ██║██║██║   ██║██║     █████╗  ██║   ║
-    ║  ██╔══██║██║   ██║██║  ██║██║██║   ██║██║     ██╔══╝  ██║   ║
-    ║  ██║  ██║╚██████╔╝██████╔╝██║╚██████╔╝███████╗███████╗███████╗
-    ║  ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═╝ ╚═════╝ ╚══════╝╚══════╝╚══════╝
-    ╚══════════════════════════════════════════════════════════════╝
-              Professional Audio Normalization for Everyone
+     _             _ _       _                   _
+    / \  _   _  __| (_) ___ | |    _____   _____| |
+   / _ \| | | |/ _` | |/ _ \| |   / _ \ \ / / _ \ |
+  / ___ \ |_| | (_| | | (_) | |__|  __/\ V /  __/ |
+ /_/   \_\__,_|\__,_|_|\___/|_____\___| \_/ \___|_|
+
+        Professional Audio Normalization for Everyone
 ```
 
 A free, web-based audio normalization tool. Upload your audio, pick a preset, and download broadcast-ready files. No login required. No data retained.
@@ -20,10 +18,10 @@ A free, web-based audio normalization tool. Upload your audio, pick a preset, an
 
 - **6 Industry Presets** — Podcast, Broadcast, YouTube, Streaming, Mastering, Audiobook
 - **Multi-Format Support** — WAV, MP3, FLAC, AAC, OGG input and output
-- **Real-Time Progress** — WebSocket-powered live updates with waveform visualization
+- **Real-Time Progress** — WebSocket-powered live updates during processing
 - **Privacy First** — All files auto-delete after 15 minutes
 - **No Account Needed** — Just upload and go
-- **Before/After Comparison** — Visual waveform comparison with playback
+- **Download History** — Session-based tracking of recent conversions
 
 ---
 
@@ -113,7 +111,6 @@ Visit `http://localhost:5173` for the frontend.
 - [Svelte 5](https://svelte.dev) — UI framework
 - [Vite](https://vitejs.dev) — Build tool
 - [TailwindCSS](https://tailwindcss.com) — Styling
-- [Wavesurfer.js](https://wavesurfer.xyz) — Waveform visualization
 
 ---
 
