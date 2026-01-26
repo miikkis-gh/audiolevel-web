@@ -62,19 +62,19 @@
   }
 </script>
 
-<div class="bg-white rounded-lg shadow p-4 border border-gray-200">
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border border-gray-200 dark:border-gray-700">
   <div class="flex items-center justify-between mb-2">
     <div class="flex items-center gap-2 min-w-0">
-      <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
       </svg>
-      <span class="font-medium text-gray-900 truncate" title={fileName}>{fileName}</span>
+      <span class="font-medium text-gray-900 dark:text-gray-100 truncate" title={fileName}>{fileName}</span>
     </div>
 
     {#if status === 'processing' && onCancel}
       <button
         onclick={onCancel}
-        class="text-gray-400 hover:text-gray-600 transition-colors"
+        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
         title="Cancel"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +85,7 @@
   </div>
 
   <!-- Progress bar -->
-  <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+  <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
     <div
       class="h-2 rounded-full transition-all duration-300 {statusColor}"
       style="width: {status === 'complete' ? 100 : status === 'error' ? 100 : $progress.percent}%"
@@ -93,7 +93,7 @@
   </div>
 
   <div class="flex items-center justify-between">
-    <span class="text-sm {status === 'error' ? 'text-red-600' : 'text-gray-500'}">
+    <span class="text-sm {status === 'error' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}">
       {statusText}
     </span>
 

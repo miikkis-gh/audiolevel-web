@@ -206,12 +206,12 @@
 <!-- Offline banner -->
 <OfflineBanner />
 
-<main class="min-h-screen bg-gray-50 py-8 px-4">
+<main class="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
   <div class="max-w-2xl mx-auto">
     <!-- Header -->
     <div class="text-center mb-8">
-      <h1 class="text-4xl font-bold text-gray-900 mb-2">AudioLevel</h1>
-      <p class="text-gray-600">
+      <h1 class="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">AudioLevel</h1>
+      <p class="text-gray-600 dark:text-gray-400">
         Free audio normalization with industry-standard presets
       </p>
     </div>
@@ -238,7 +238,7 @@
     {/if}
 
     <!-- Main card -->
-    <div class="bg-white rounded-lg shadow-lg p-6 md:p-8 mb-6">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 md:p-8 mb-6">
       {#if isLoadingPresets}
         <!-- Loading skeleton -->
         <div class="space-y-6">
@@ -273,7 +273,7 @@
 
       <!-- Uploading indicator -->
       {#if isUploading}
-        <div class="mt-4 flex items-center justify-center gap-2 text-gray-500">
+        <div class="mt-4 flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400">
           <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -286,7 +286,7 @@
     <!-- Active jobs -->
     {#if activeJobs.length > 0}
       <div class="space-y-4 mb-6">
-        <h2 class="text-lg font-semibold text-gray-900">Processing</h2>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Processing</h2>
         {#each activeJobs as job (job.id)}
           <ProgressIndicator
             jobId={job.id}
@@ -302,7 +302,7 @@
     <!-- Download History -->
     {#if $downloadHistory.length > 0}
       <div class="mb-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Recent Downloads</h2>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Recent Downloads</h2>
         <DownloadHistory
           items={$downloadHistory}
           onDownload={handleHistoryDownload}
@@ -312,7 +312,7 @@
     {/if}
 
     <!-- Footer -->
-    <div class="flex flex-col gap-2 text-xs text-gray-400">
+    <div class="flex flex-col gap-2 text-xs text-gray-400 dark:text-gray-500">
       <div class="flex items-center justify-between">
         <p>Files are automatically deleted after 15 minutes. No account required.</p>
         <ConnectionStatus />
