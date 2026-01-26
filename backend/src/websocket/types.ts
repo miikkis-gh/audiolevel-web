@@ -19,12 +19,12 @@ export const WS_MESSAGE_TYPES = {
 // Client -> Server message schemas
 export const subscribeMessageSchema = z.object({
   type: z.literal(WS_MESSAGE_TYPES.SUBSCRIBE),
-  jobId: z.string().uuid(),
+  jobId: z.string().min(1),
 });
 
 export const unsubscribeMessageSchema = z.object({
   type: z.literal(WS_MESSAGE_TYPES.UNSUBSCRIBE),
-  jobId: z.string().uuid(),
+  jobId: z.string().min(1),
 });
 
 export const pingMessageSchema = z.object({

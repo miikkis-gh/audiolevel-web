@@ -125,7 +125,7 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
     // Emit WebSocket event for completion
     if (result.success && result.outputPath) {
       emitJobComplete(job.data.jobId, {
-        downloadUrl: `/api/job/${job.data.jobId}/download`,
+        downloadUrl: `/api/upload/job/${job.data.jobId}/download`,
         duration: result.duration,
       });
     }

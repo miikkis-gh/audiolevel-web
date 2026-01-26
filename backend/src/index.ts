@@ -107,7 +107,26 @@ initializeServices().catch((err) => {
 // Export server configuration with WebSocket support
 export default {
   port: env.PORT,
-  fetch: app.fetch,
+  fetch(req: Request, server: import('bun').Server) {
+    // Handle WebSocket upgrade
+    const url = new URL(req.url);
+    if (url.pathname === '/ws') {
+      const upgraded = server.upgrade(req, {
+        data: {
+          sessionId: '',
+          subscribedJobs: new Set<string>(),
+          lastPing: Date.now(),
+        },
+      });
+      if (upgraded) {
+        return undefined;
+      }
+      return new Response('WebSocket upgrade failed', { status: 400 });
+    }
+
+    // Handle regular HTTP requests via Hono
+    return app.fetch(req);
+  },
   websocket: {
     open(ws: import('bun').ServerWebSocket<WebSocketData>) {
       handleOpen(ws);

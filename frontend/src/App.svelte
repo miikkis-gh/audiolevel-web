@@ -44,7 +44,7 @@
   let presetsLoadError = $state<string | null>(null);
 
   // API URL for downloads
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const API_URL = import.meta.env.VITE_API_URL || '';
 
   // Function to refresh rate limit status
   async function refreshRateLimitStatus() {
