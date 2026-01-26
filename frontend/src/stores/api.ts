@@ -40,6 +40,45 @@ export interface ApiError extends Error {
   code?: string;
   status?: number;
   retryAfter?: number;
+  hint?: string;
+}
+
+export interface QueueStatus {
+  status: 'normal' | 'warning' | 'overloaded';
+  acceptingJobs: boolean;
+  estimatedWaitTime?: number;
+  waiting: number;
+  active: number;
+}
+
+// Helper to create enhanced API errors
+function createApiError(response: Response, data: { error?: string; code?: string; hint?: string }): ApiError {
+  const error = new Error(data.error || getDefaultErrorMessage(response.status)) as ApiError;
+  error.code = data.code;
+  error.status = response.status;
+  error.hint = data.hint;
+
+  // Handle rate limit
+  if (response.status === 429) {
+    const retryAfter = response.headers.get('retry-after');
+    error.retryAfter = retryAfter ? parseInt(retryAfter, 10) : undefined;
+  }
+
+  return error;
+}
+
+// Default error messages for common status codes
+function getDefaultErrorMessage(status: number): string {
+  switch (status) {
+    case 400: return 'Invalid request';
+    case 401: return 'Authentication required';
+    case 403: return 'Access denied';
+    case 404: return 'Not found';
+    case 429: return 'Too many requests';
+    case 500: return 'Server error';
+    case 503: return 'Service unavailable';
+    default: return 'An error occurred';
+  }
 }
 
 export async function fetchPresets(): Promise<Preset[]> {
@@ -59,6 +98,14 @@ export async function fetchRateLimitStatus(): Promise<RateLimitStatus> {
   return response.json();
 }
 
+export async function fetchQueueStatus(): Promise<QueueStatus> {
+  const response = await fetch(`${API_URL}/api/upload/queue-status`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch queue status');
+  }
+  return response.json();
+}
+
 export async function uploadFile(file: File, preset: string, outputFormat: string = 'wav'): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append('file', file);
@@ -72,17 +119,7 @@ export async function uploadFile(file: File, preset: string, outputFormat: strin
 
   if (!response.ok) {
     const errorData = await response.json();
-    const error = new Error(errorData.error || 'Upload failed') as ApiError;
-    error.code = errorData.code;
-    error.status = response.status;
-
-    // Handle rate limit error
-    if (response.status === 429) {
-      const retryAfter = response.headers.get('retry-after');
-      error.retryAfter = retryAfter ? parseInt(retryAfter, 10) : undefined;
-    }
-
-    throw error;
+    throw createApiError(response, errorData);
   }
 
   return response.json();
