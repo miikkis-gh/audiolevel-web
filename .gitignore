@@ -46,3 +46,7 @@ bun.lockb
 
 # Redis dump
 dump.rdb
+
+# Internal documentation
+CLAUDE.md
+MILESTONES.md
