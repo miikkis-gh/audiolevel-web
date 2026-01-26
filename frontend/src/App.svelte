@@ -5,6 +5,9 @@
   import ConnectionStatus from './lib/components/ConnectionStatus.svelte';
   import DownloadHistory from './lib/components/DownloadHistory.svelte';
   import RateLimitBanner from './lib/components/RateLimitBanner.svelte';
+  import ErrorMessage from './lib/components/ErrorMessage.svelte';
+  import OfflineBanner from './lib/components/OfflineBanner.svelte';
+  import LoadingSkeleton from './lib/components/LoadingSkeleton.svelte';
   import type { HistoryItem } from './lib/components/DownloadHistory.svelte';
   import {
     connectWebSocket,
@@ -32,11 +35,13 @@
   let presets = $state<Preset[]>([]);
   let selectedPreset = $state('podcast');
   let isUploading = $state(false);
-  let uploadError = $state<string | null>(null);
+  let uploadError = $state<ApiError | null>(null);
   let activeJobs = $state<Array<{ id: string; fileName: string; preset: string; outputFormat: string }>>([]);
   let cleanupInterval: ReturnType<typeof setInterval>;
   let rateLimitStatus = $state<RateLimitStatus | null>(null);
   let rateLimitError = $state<string | null>(null);
+  let isLoadingPresets = $state(true);
+  let presetsLoadError = $state<string | null>(null);
 
   // API URL for downloads
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -58,6 +63,9 @@
     connectWebSocket();
 
     // Fetch presets and rate limit status in parallel
+    isLoadingPresets = true;
+    presetsLoadError = null;
+
     try {
       const [presetsResult] = await Promise.all([
         fetchPresets(),
@@ -69,6 +77,9 @@
       }
     } catch (err) {
       console.error('Failed to fetch presets:', err);
+      presetsLoadError = 'Failed to load presets. Please refresh the page.';
+    } finally {
+      isLoadingPresets = false;
     }
 
     // Clean up expired items periodically
@@ -108,7 +119,10 @@
 
     // Check if rate limited
     if (rateLimitStatus?.remaining === 0) {
-      uploadError = 'Upload limit reached. Please wait for the limit to reset.';
+      const error = new Error('Upload limit reached. Please wait for the limit to reset.') as ApiError;
+      error.code = 'RATE_LIMITED';
+      error.hint = 'You can upload up to 10 files per hour.';
+      uploadError = error;
       return;
     }
 
@@ -134,18 +148,24 @@
       await refreshRateLimitStatus();
     } catch (err) {
       const apiError = err as ApiError;
+      uploadError = apiError;
+
+      // Refresh rate limit status if it was a rate limit error
       if (apiError.status === 429) {
-        uploadError = apiError.retryAfter
-          ? `Upload limit reached. Please try again in ${Math.ceil(apiError.retryAfter / 60)} minute${apiError.retryAfter > 60 ? 's' : ''}.`
-          : 'Upload limit reached. Please try again later.';
-        // Refresh status to update the banner
         await refreshRateLimitStatus();
-      } else {
-        uploadError = err instanceof Error ? err.message : 'Upload failed';
       }
     } finally {
       isUploading = false;
     }
+  }
+
+  function clearUploadError() {
+    uploadError = null;
+  }
+
+  function retryUpload() {
+    uploadError = null;
+    // The user will need to select a file again
   }
 
   function handlePresetChange(preset: string) {
@@ -168,7 +188,10 @@
 
   function handleRetry(jobId: string) {
     handleClearJob(jobId);
-    uploadError = 'Please re-upload the file to retry.';
+    const error = new Error('Processing failed. Please re-upload the file to retry.') as ApiError;
+    error.code = 'RETRY_NEEDED';
+    error.hint = 'Select your file again and click upload.';
+    uploadError = error;
   }
 
   function handleHistoryDownload(url: string, fileName: string) {
@@ -180,6 +203,9 @@
   }
 </script>
 
+<!-- Offline banner -->
+<OfflineBanner />
+
 <main class="min-h-screen bg-gray-50 py-8 px-4">
   <div class="max-w-2xl mx-auto">
     <!-- Header -->
@@ -189,6 +215,16 @@
         Free audio normalization with industry-standard presets
       </p>
     </div>
+
+    <!-- Presets load error -->
+    {#if presetsLoadError}
+      <div class="mb-4">
+        <ErrorMessage
+          error={presetsLoadError}
+          onRetry={() => window.location.reload()}
+        />
+      </div>
+    {/if}
 
     <!-- Rate limit banner -->
     {#if rateLimitStatus?.remaining === 0 || (rateLimitStatus && rateLimitStatus.remaining <= 3) || rateLimitError}
@@ -203,19 +239,35 @@
 
     <!-- Main card -->
     <div class="bg-white rounded-lg shadow-lg p-6 md:p-8 mb-6">
-      <!-- File upload -->
-      <FileUpload
-        onFileSelect={handleFileSelect}
-        {selectedPreset}
-        {presets}
-        onPresetChange={handlePresetChange}
-        disabled={isUploading || rateLimitStatus?.remaining === 0}
-      />
+      {#if isLoadingPresets}
+        <!-- Loading skeleton -->
+        <div class="space-y-6">
+          <LoadingSkeleton variant="card" height="200px" />
+          <div class="flex gap-3">
+            <LoadingSkeleton variant="button" width="100px" />
+            <LoadingSkeleton variant="button" width="100px" />
+            <LoadingSkeleton variant="button" width="100px" />
+          </div>
+        </div>
+      {:else}
+        <!-- File upload -->
+        <FileUpload
+          onFileSelect={handleFileSelect}
+          {selectedPreset}
+          {presets}
+          onPresetChange={handlePresetChange}
+          disabled={isUploading || rateLimitStatus?.remaining === 0}
+        />
+      {/if}
 
       <!-- Upload error -->
       {#if uploadError}
-        <div class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p class="text-sm text-red-600">{uploadError}</p>
+        <div class="mt-4">
+          <ErrorMessage
+            error={uploadError}
+            onRetry={retryUpload}
+            onDismiss={clearUploadError}
+          />
         </div>
       {/if}
 
