@@ -75,7 +75,8 @@ function getCodecArgs(format: string): string[] {
     case 'm4a':
       return ['-c:a', 'aac', '-b:a', '256k'];
     case 'ogg':
-      return ['-c:a', 'libvorbis', '-q:a', '8'];
+      // Use bitrate instead of quality scale for ffmpeg-normalize compatibility
+      return ['-c:a', 'libvorbis', '-b:a', '192k'];
     case 'wav':
     default:
       return ['-c:a', 'pcm_s16le'];

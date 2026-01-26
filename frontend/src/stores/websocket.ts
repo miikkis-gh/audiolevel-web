@@ -321,7 +321,12 @@ let wsClient: WebSocketClient | null = null;
 
 export function getWebSocketClient(): WebSocketClient {
   if (!wsClient) {
-    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3000/ws';
+    // Use environment variable if set, otherwise construct from current location
+    let wsUrl = import.meta.env.VITE_WS_URL;
+    if (!wsUrl) {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${protocol}//${window.location.host}/ws`;
+    }
     wsClient = new WebSocketClient(wsUrl);
   }
   return wsClient;
