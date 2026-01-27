@@ -43,20 +43,35 @@
   let isLoadingPresets = $state(true);
   let presetsLoadError = $state<string | null>(null);
 
-  // Mouse parallax state
+  // Mouse parallax state with smooth interpolation
   let mouseX = $state(0);
   let mouseY = $state(0);
+  let targetX = 0;
+  let targetY = 0;
   let blobContainer: HTMLDivElement;
+  let animationFrameId: number;
 
   // API URL for downloads
   const API_URL = import.meta.env.VITE_API_URL || '';
+
+  // Smooth lerp function for eased parallax
+  function lerp(start: number, end: number, factor: number): number {
+    return start + (end - start) * factor;
+  }
 
   // Mouse move handler for parallax effect
   function handleMouseMove(e: MouseEvent) {
     const { clientX, clientY } = e;
     const { innerWidth, innerHeight } = window;
-    mouseX = (clientX / innerWidth - 0.5) * 30;
-    mouseY = (clientY / innerHeight - 0.5) * 30;
+    targetX = (clientX / innerWidth - 0.5) * 40;
+    targetY = (clientY / innerHeight - 0.5) * 40;
+  }
+
+  // Animation loop for smooth parallax
+  function animateParallax() {
+    mouseX = lerp(mouseX, targetX, 0.08);
+    mouseY = lerp(mouseY, targetY, 0.08);
+    animationFrameId = requestAnimationFrame(animateParallax);
   }
 
   // Function to refresh rate limit status
@@ -77,6 +92,9 @@
 
     // Add mouse move listener for parallax
     window.addEventListener('mousemove', handleMouseMove);
+
+    // Start parallax animation loop
+    animateParallax();
 
     // Fetch presets and rate limit status in parallel
     isLoadingPresets = true;
@@ -106,6 +124,9 @@
   onDestroy(() => {
     disconnectWebSocket();
     window.removeEventListener('mousemove', handleMouseMove);
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
+    }
     if (cleanupInterval) {
       clearInterval(cleanupInterval);
     }
@@ -223,17 +244,21 @@
 <!-- Animated gradient background -->
 <div class="gradient-bg"></div>
 
-<!-- Animated blobs with parallax -->
+<!-- Animated blobs with layered parallax depth -->
 <div
   bind:this={blobContainer}
   class="fixed inset-0 overflow-hidden pointer-events-none z-[-1]"
-  style="transform: translate({mouseX}px, {mouseY}px)"
 >
-  <div class="blob blob-indigo animate-blob-1"></div>
-  <div class="blob blob-violet animate-blob-2"></div>
-  <div class="blob blob-sky animate-blob-3"></div>
-  <div class="blob blob-cyan animate-blob-4"></div>
-  <div class="blob blob-fuchsia animate-blob-5"></div>
+  <!-- Background layer - slowest parallax -->
+  <div class="blob blob-indigo animate-blob-1" style="transform: translate({mouseX * 0.3}px, {mouseY * 0.3}px)"></div>
+  <!-- Mid-background layer -->
+  <div class="blob blob-violet animate-blob-2" style="transform: translate({mouseX * 0.5}px, {mouseY * 0.5}px)"></div>
+  <!-- Middle layer -->
+  <div class="blob blob-sky animate-blob-3" style="transform: translate({mouseX * 0.7}px, {mouseY * 0.7}px)"></div>
+  <!-- Mid-foreground layer -->
+  <div class="blob blob-cyan animate-blob-4" style="transform: translate({mouseX * 0.9}px, {mouseY * 0.9}px)"></div>
+  <!-- Foreground layer - fastest parallax -->
+  <div class="blob blob-fuchsia animate-blob-5" style="transform: translate(calc(-50% + {mouseX * 1.2}px), calc(-50% + {mouseY * 1.2}px))"></div>
 </div>
 
 <!-- Noise texture overlay -->
@@ -246,13 +271,18 @@
   <div class="max-w-2xl mx-auto">
     <!-- Header -->
     <header class="text-center mb-10 animate-entrance">
-      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl glass-card mb-6">
-        <svg class="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-        </svg>
+      <div class="relative inline-flex items-center justify-center mb-6 group">
+        <!-- Glow effect behind icon -->
+        <div class="absolute inset-0 w-16 h-16 bg-gradient-to-br from-indigo-500/30 to-violet-500/30 rounded-2xl blur-xl opacity-60 group-hover:opacity-100 transition-opacity duration-500"></div>
+        <!-- Floating icon container -->
+        <div class="relative inline-flex items-center justify-center w-16 h-16 rounded-2xl glass-card animate-float">
+          <svg class="w-8 h-8 text-indigo-400 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+          </svg>
+        </div>
       </div>
       <h1 class="text-4xl md:text-5xl font-semibold text-gradient mb-3 tracking-tight">AudioLevel</h1>
-      <p class="text-white/50 text-lg">
+      <p class="text-white/50 text-lg max-w-md mx-auto">
         Professional audio normalization with industry-standard presets
       </p>
     </header>
