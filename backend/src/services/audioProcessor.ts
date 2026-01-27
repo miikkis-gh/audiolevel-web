@@ -1,4 +1,6 @@
 import { spawn, type Subprocess } from 'bun';
+import { randomUUID } from 'crypto';
+import { unlink } from 'fs/promises';
 import { env } from '../config/env';
 import { logger, createChildLogger } from '../utils/logger';
 import {
@@ -21,6 +23,8 @@ import {
   type ResourceLimits,
   DEFAULT_RESOURCE_LIMITS,
 } from '../utils/resourceLimiter';
+import { runMasteringProcess } from './masteringProcessor';
+import { convertFormat } from './formatConverter';
 import type { Preset } from '../schemas/upload';
 
 export interface ProcessingResult {
@@ -225,6 +229,13 @@ export async function normalizeAudio(
 
     log.info({ metadata }, 'Audio metadata retrieved');
 
+    // === MASTERING PRESET: Use custom FFmpeg pipeline ===
+    if (options.preset === 'mastering') {
+      return await processMasteringPreset(options, callbacks, log, startTime);
+    }
+
+    // === OTHER PRESETS: Use ffmpeg-normalize as before ===
+
     // Analyze input loudness
     callbacks?.onStage?.('Measuring loudness...');
     callbacks?.onProgress?.(10);
@@ -357,4 +368,106 @@ export async function verifyDependencies(): Promise<{
 
   logger.info({ dependencies: results }, 'Dependency check complete');
   return results;
+}
+
+/**
+ * Process mastering preset with custom FFmpeg pipeline
+ */
+async function processMasteringPreset(
+  options: NormalizeOptions,
+  callbacks: ProcessingCallbacks | undefined,
+  log: ReturnType<typeof createChildLogger>,
+  startTime: number
+): Promise<ProcessingResult> {
+  // Determine output format from the output path
+  const outputFormat = options.outputPath.split('.').pop()?.toLowerCase() || 'wav';
+
+  // For mastering, we always process to WAV first, then convert
+  const intermediateWav = options.outputPath.replace(/\.[^.]+$/, `-mastered-${randomUUID().slice(0, 8)}.wav`);
+
+  try {
+    // Run mastering process
+    const masterResult = await runMasteringProcess(
+      options.inputPath,
+      outputFormat === 'wav' ? options.outputPath : intermediateWav,
+      {
+        onProgress: (percent) => {
+          // Map mastering progress to 10-80%
+          const mappedProgress = 10 + Math.floor((percent / 100) * 70);
+          callbacks?.onProgress?.(mappedProgress);
+        },
+        onStage: callbacks?.onStage,
+      }
+    );
+
+    if (!masterResult.success) {
+      return {
+        success: false,
+        error: masterResult.error || 'Mastering failed',
+        duration: Date.now() - startTime,
+      };
+    }
+
+    // If output format is not WAV, convert
+    if (outputFormat !== 'wav') {
+      callbacks?.onStage?.('Converting to output format...');
+      callbacks?.onProgress?.(85);
+
+      const convertResult = await convertFormat({
+        inputPath: intermediateWav,
+        outputPath: options.outputPath,
+        outputFormat,
+      });
+
+      // Clean up intermediate WAV
+      try {
+        await unlink(intermediateWav);
+      } catch (e) {
+        log.warn({ err: e }, 'Failed to clean up intermediate file');
+      }
+
+      if (!convertResult.success) {
+        return {
+          success: false,
+          error: convertResult.error || 'Format conversion failed',
+          duration: Date.now() - startTime,
+        };
+      }
+    }
+
+    callbacks?.onProgress?.(100);
+    const duration = Date.now() - startTime;
+
+    log.info({
+      duration,
+      filterChain: masterResult.filterChain,
+      decisions: masterResult.decisions,
+      inputLufs: masterResult.inputAnalysis?.integratedLufs,
+      outputLufs: masterResult.outputAnalysis?.integratedLufs,
+    }, 'Mastering preset complete');
+
+    return {
+      success: true,
+      outputPath: options.outputPath,
+      duration,
+      inputAnalysis: masterResult.inputAnalysis ? {
+        inputLufs: masterResult.inputAnalysis.integratedLufs,
+        inputTruePeak: masterResult.inputAnalysis.truePeak,
+        inputLoudnessRange: masterResult.inputAnalysis.lra,
+      } : undefined,
+      outputAnalysis: masterResult.outputAnalysis ? {
+        inputLufs: masterResult.outputAnalysis.integratedLufs,
+        inputTruePeak: masterResult.outputAnalysis.truePeak,
+        inputLoudnessRange: masterResult.outputAnalysis.lra,
+      } : undefined,
+    };
+  } catch (err) {
+    // Clean up intermediate file on error
+    try {
+      await unlink(intermediateWav);
+    } catch (e) {
+      // Ignore
+    }
+    throw err;
+  }
 }
