@@ -43,8 +43,21 @@
   let isLoadingPresets = $state(true);
   let presetsLoadError = $state<string | null>(null);
 
+  // Mouse parallax state
+  let mouseX = $state(0);
+  let mouseY = $state(0);
+  let blobContainer: HTMLDivElement;
+
   // API URL for downloads
   const API_URL = import.meta.env.VITE_API_URL || '';
+
+  // Mouse move handler for parallax effect
+  function handleMouseMove(e: MouseEvent) {
+    const { clientX, clientY } = e;
+    const { innerWidth, innerHeight } = window;
+    mouseX = (clientX / innerWidth - 0.5) * 30;
+    mouseY = (clientY / innerHeight - 0.5) * 30;
+  }
 
   // Function to refresh rate limit status
   async function refreshRateLimitStatus() {
@@ -61,6 +74,9 @@
   onMount(async () => {
     // Connect WebSocket
     connectWebSocket();
+
+    // Add mouse move listener for parallax
+    window.addEventListener('mousemove', handleMouseMove);
 
     // Fetch presets and rate limit status in parallel
     isLoadingPresets = true;
@@ -89,6 +105,7 @@
 
   onDestroy(() => {
     disconnectWebSocket();
+    window.removeEventListener('mousemove', handleMouseMove);
     if (cleanupInterval) {
       clearInterval(cleanupInterval);
     }
@@ -203,22 +220,46 @@
   }
 </script>
 
+<!-- Animated gradient background -->
+<div class="gradient-bg"></div>
+
+<!-- Animated blobs with parallax -->
+<div
+  bind:this={blobContainer}
+  class="fixed inset-0 overflow-hidden pointer-events-none z-[-1]"
+  style="transform: translate({mouseX}px, {mouseY}px)"
+>
+  <div class="blob blob-indigo animate-blob-1"></div>
+  <div class="blob blob-violet animate-blob-2"></div>
+  <div class="blob blob-sky animate-blob-3"></div>
+  <div class="blob blob-cyan animate-blob-4"></div>
+  <div class="blob blob-fuchsia animate-blob-5"></div>
+</div>
+
+<!-- Noise texture overlay -->
+<div class="noise-overlay"></div>
+
 <!-- Offline banner -->
 <OfflineBanner />
 
-<main class="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
+<main class="relative min-h-screen py-8 px-4 md:py-12 md:px-6">
   <div class="max-w-2xl mx-auto">
     <!-- Header -->
-    <div class="text-center mb-8">
-      <h1 class="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">AudioLevel</h1>
-      <p class="text-gray-600 dark:text-gray-400">
-        Free audio normalization with industry-standard presets
+    <header class="text-center mb-10 animate-entrance">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl glass-card mb-6">
+        <svg class="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+        </svg>
+      </div>
+      <h1 class="text-4xl md:text-5xl font-semibold text-gradient mb-3 tracking-tight">AudioLevel</h1>
+      <p class="text-white/50 text-lg">
+        Professional audio normalization with industry-standard presets
       </p>
-    </div>
+    </header>
 
     <!-- Presets load error -->
     {#if presetsLoadError}
-      <div class="mb-4">
+      <div class="mb-6 animate-entrance stagger-1">
         <ErrorMessage
           error={presetsLoadError}
           onRetry={() => window.location.reload()}
@@ -228,7 +269,7 @@
 
     <!-- Rate limit banner -->
     {#if rateLimitStatus?.remaining === 0 || (rateLimitStatus && rateLimitStatus.remaining <= 3) || rateLimitError}
-      <div class="mb-4">
+      <div class="mb-6 animate-entrance stagger-1">
         <RateLimitBanner
           status={rateLimitStatus}
           error={rateLimitError}
@@ -238,7 +279,7 @@
     {/if}
 
     <!-- Main card -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 md:p-8 mb-6">
+    <div class="glass-card rounded-2xl p-6 md:p-8 mb-8 animate-entrance stagger-2">
       {#if isLoadingPresets}
         <!-- Loading skeleton -->
         <div class="space-y-6">
@@ -262,7 +303,7 @@
 
       <!-- Upload error -->
       {#if uploadError}
-        <div class="mt-4">
+        <div class="mt-6">
           <ErrorMessage
             error={uploadError}
             onRetry={retryUpload}
@@ -273,55 +314,71 @@
 
       <!-- Uploading indicator -->
       {#if isUploading}
-        <div class="mt-4 flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400">
-          <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+        <div class="mt-6 flex items-center justify-center gap-3 text-white/50">
+          <svg class="animate-spin h-5 w-5 text-indigo-400" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          <span>Uploading...</span>
+          <span>Uploading your file...</span>
         </div>
       {/if}
     </div>
 
     <!-- Active jobs -->
     {#if activeJobs.length > 0}
-      <div class="space-y-4 mb-6">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Processing</h2>
-        {#each activeJobs as job (job.id)}
-          <ProgressIndicator
-            jobId={job.id}
-            fileName={job.fileName}
-            onDownload={(url) => handleDownload(url, job.fileName)}
-            onRetry={() => handleRetry(job.id)}
-            onCancel={() => handleClearJob(job.id)}
-          />
-        {/each}
-      </div>
+      <section class="mb-8 animate-entrance stagger-3">
+        <h2 class="text-lg font-medium text-white/90 mb-4 flex items-center gap-2">
+          <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Processing
+        </h2>
+        <div class="space-y-4">
+          {#each activeJobs as job, i (job.id)}
+            <div class="animate-entrance" style="animation-delay: {i * 0.1}s">
+              <ProgressIndicator
+                jobId={job.id}
+                fileName={job.fileName}
+                onDownload={(url) => handleDownload(url, job.fileName)}
+                onRetry={() => handleRetry(job.id)}
+                onCancel={() => handleClearJob(job.id)}
+              />
+            </div>
+          {/each}
+        </div>
+      </section>
     {/if}
 
     <!-- Download History -->
     {#if $downloadHistory.length > 0}
-      <div class="mb-6">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Recent Downloads</h2>
+      <section class="mb-8 animate-entrance stagger-4">
+        <h2 class="text-lg font-medium text-white/90 mb-4 flex items-center gap-2">
+          <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Recent Downloads
+        </h2>
         <DownloadHistory
           items={$downloadHistory}
           onDownload={handleHistoryDownload}
           onRemove={handleHistoryRemove}
         />
-      </div>
+      </section>
     {/if}
 
     <!-- Footer -->
-    <div class="flex flex-col gap-2 text-xs text-gray-400 dark:text-gray-500">
-      <div class="flex items-center justify-between">
-        <p>Files are automatically deleted after 15 minutes. No account required.</p>
-        <ConnectionStatus />
-      </div>
-      {#if rateLimitStatus && rateLimitStatus.remaining > 3}
-        <div class="flex justify-center">
-          <RateLimitBanner status={rateLimitStatus} />
+    <footer class="animate-entrance stagger-5">
+      <div class="glass-card rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <p class="text-sm text-white/40 text-center sm:text-left">
+          Files are automatically deleted after 15 minutes. No account required.
+        </p>
+        <div class="flex items-center gap-4">
+          {#if rateLimitStatus && rateLimitStatus.remaining > 3}
+            <RateLimitBanner status={rateLimitStatus} />
+          {/if}
+          <ConnectionStatus />
         </div>
-      {/if}
-    </div>
+      </div>
+    </footer>
   </div>
 </main>

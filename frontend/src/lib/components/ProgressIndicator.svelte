@@ -40,18 +40,43 @@
     }
   });
 
-  let statusColor = $derived.by(() => {
+  let statusConfig = $derived.by(() => {
     switch (status) {
       case 'queued':
-        return 'bg-gray-400';
+        return {
+          gradient: 'from-white/10 to-white/5',
+          glow: '',
+          textColor: 'text-white/50',
+          iconColor: 'text-white/40',
+        };
       case 'processing':
-        return 'bg-primary-500';
+        return {
+          gradient: 'progress-gradient',
+          glow: 'glow-violet',
+          textColor: 'text-violet-300',
+          iconColor: 'text-violet-400',
+        };
       case 'complete':
-        return 'bg-green-500';
+        return {
+          gradient: 'from-emerald-500 to-green-500',
+          glow: 'glow-success',
+          textColor: 'text-emerald-300',
+          iconColor: 'text-emerald-400',
+        };
       case 'error':
-        return 'bg-red-500';
+        return {
+          gradient: 'from-red-500 to-rose-500',
+          glow: '',
+          textColor: 'text-red-300',
+          iconColor: 'text-red-400',
+        };
       default:
-        return 'bg-gray-400';
+        return {
+          gradient: 'from-white/10 to-white/5',
+          glow: '',
+          textColor: 'text-white/50',
+          iconColor: 'text-white/40',
+        };
     }
   });
 
@@ -62,19 +87,22 @@
   }
 </script>
 
-<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border border-gray-200 dark:border-gray-700">
-  <div class="flex items-center justify-between mb-2">
-    <div class="flex items-center gap-2 min-w-0">
-      <svg class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-      </svg>
-      <span class="font-medium text-gray-900 dark:text-gray-100 truncate" title={fileName}>{fileName}</span>
+<div class="glass-card glass-card-hover rounded-xl p-5">
+  <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center gap-3 min-w-0">
+      <!-- Audio icon -->
+      <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/5 flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 {statusConfig.iconColor}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+        </svg>
+      </div>
+      <span class="font-medium text-white/90 truncate" title={fileName}>{fileName}</span>
     </div>
 
     {#if status === 'processing' && onCancel}
       <button
         onclick={onCancel}
-        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+        class="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5 transition-all duration-200"
         title="Cancel"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,40 +113,70 @@
   </div>
 
   <!-- Progress bar -->
-  <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+  <div class="relative w-full h-2 rounded-full bg-white/5 overflow-hidden mb-3">
     <div
-      class="h-2 rounded-full transition-all duration-300 {statusColor}"
+      class="absolute inset-y-0 left-0 rounded-full transition-all duration-500 ease-out bg-gradient-to-r {statusConfig.gradient}
+        {status === 'processing' ? 'animate-shimmer bg-[length:200%_100%]' : ''}"
       style="width: {status === 'complete' ? 100 : status === 'error' ? 100 : $progress.percent}%"
     ></div>
+
+    <!-- Glow effect for active progress -->
+    {#if status === 'processing'}
+      <div
+        class="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-indigo-500/50 to-violet-500/50 blur-sm"
+        style="width: {$progress.percent}%"
+      ></div>
+    {/if}
   </div>
 
   <div class="flex items-center justify-between">
-    <span class="text-sm {status === 'error' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}">
-      {statusText}
-    </span>
+    <div class="flex items-center gap-2">
+      <!-- Status indicator dot -->
+      {#if status === 'processing'}
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+        </span>
+      {:else if status === 'complete'}
+        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      {:else if status === 'error'}
+        <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      {/if}
+
+      <span class="text-sm {statusConfig.textColor}">
+        {statusText}
+      </span>
+    </div>
 
     <div class="flex gap-2">
       {#if status === 'complete' && $result?.downloadUrl}
         <button
           onclick={handleDownload}
-          class="inline-flex items-center gap-1 px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
+          class="glass-button glass-button-success px-4 py-2 rounded-lg text-sm group"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
-          Download
+          <span class="text-emerald-100">Download</span>
+          <svg class="w-3 h-3 arrow text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
         </button>
       {/if}
 
       {#if status === 'error' && onRetry}
         <button
           onclick={onRetry}
-          class="inline-flex items-center gap-1 px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600 transition-colors"
+          class="glass-button px-4 py-2 rounded-lg text-sm"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Retry
+          <span class="text-white/80">Retry</span>
         </button>
       {/if}
     </div>
