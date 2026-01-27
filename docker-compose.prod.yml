@@ -67,7 +67,7 @@ services:
     container_name: audiolevel-frontend
     restart: always
     ports:
-      - "80:80"
+      - "8081:80"
     networks:
       - audiolevel-network
     depends_on:
