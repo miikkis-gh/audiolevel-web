@@ -325,14 +325,14 @@
       class="glass-button glass-button-primary w-full py-4 px-6 rounded-xl font-medium text-base justify-center group animate-scale-in"
       disabled={disabled}
     >
-      <!-- Icon -->
-      <svg class="w-5 h-5 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <!-- Icon with scale effect on hover -->
+      <svg class="w-5 h-5 text-indigo-300 icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
       </svg>
 
       <span class="text-white/90">Normalize Audio</span>
 
-      <!-- Arrow reveal on hover -->
+      <!-- Arrow reveal on hover with bounce -->
       <svg class="w-4 h-4 arrow text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
       </svg>
