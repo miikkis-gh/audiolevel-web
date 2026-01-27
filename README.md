@@ -166,6 +166,22 @@ VITE_WS_URL=ws://localhost:3000/ws
 
 ---
 
+## Reverse Proxy Configuration
+
+This application runs behind an nginx reverse proxy that handles SSL termination.
+
+**Host nginx configuration:**
+- Handles SSL/TLS (HTTPS on port 443)
+- Proxies requests to `http://localhost:8081`
+- Manages Let's Encrypt certificates
+
+**Docker nginx configuration:**
+- Serves HTTP only on port 80 (mapped to host port 8081)
+- No SSL configuration needed
+- No HTTPS redirects
+
+---
+
 ## Production Deployment
 
 ```bash
