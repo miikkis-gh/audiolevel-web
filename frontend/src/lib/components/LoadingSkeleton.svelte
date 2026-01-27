@@ -21,56 +21,79 @@
 </script>
 
 {#if variant === 'text' && lines > 1}
-  <div class="space-y-2" style="width: {width}">
+  <div class="space-y-3" style="width: {width}">
     {#each Array(lines) as _, i}
       <div
-        class="bg-gray-200 dark:bg-gray-700 rounded animate-pulse"
+        class="rounded-lg skeleton-shimmer"
         style="height: {getHeight()}; width: {i === lines - 1 ? '75%' : '100%'}"
       ></div>
     {/each}
   </div>
 {:else if variant === 'card'}
   <div
-    class="bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse"
+    class="rounded-xl skeleton-shimmer"
     style="width: {width}; height: {getHeight()}"
   ></div>
 {:else if variant === 'circle'}
   <div
-    class="bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse"
+    class="rounded-full skeleton-shimmer"
     style="width: {getHeight()}; height: {getHeight()}"
   ></div>
 {:else if variant === 'waveform'}
   <div
-    class="bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden"
+    class="rounded-xl overflow-hidden bg-white/[0.02]"
     style="width: {width}; height: {getHeight()}"
   >
-    <div class="flex items-center justify-center h-full gap-0.5 px-2">
+    <div class="flex items-center justify-center h-full gap-1 px-4">
       {#each Array(40) as _, i}
         <div
-          class="bg-gray-300 dark:bg-gray-600 rounded-full animate-pulse"
-          style="width: 3px; height: {20 + Math.sin(i * 0.5) * 30}px; animation-delay: {i * 50}ms"
+          class="rounded-full skeleton-wave"
+          style="width: 3px; height: {20 + Math.sin(i * 0.5) * 25}px; animation-delay: {i * 50}ms"
         ></div>
       {/each}
     </div>
   </div>
 {:else}
   <div
-    class="bg-gray-200 dark:bg-gray-700 rounded animate-pulse {variant === 'button' ? 'rounded-md' : ''}"
+    class="rounded-lg skeleton-shimmer {variant === 'button' ? 'rounded-xl' : ''}"
     style="width: {width}; height: {getHeight()}"
   ></div>
 {/if}
 
 <style>
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 1;
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
     }
-    50% {
-      opacity: 0.5;
+    100% {
+      background-position: 200% 0;
     }
   }
 
-  .animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  @keyframes wave {
+    0%, 100% {
+      opacity: 0.3;
+      transform: scaleY(0.8);
+    }
+    50% {
+      opacity: 0.6;
+      transform: scaleY(1);
+    }
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite linear;
+  }
+
+  .skeleton-wave {
+    background: rgba(255, 255, 255, 0.1);
+    animation: wave 1.5s ease-in-out infinite;
   }
 </style>
