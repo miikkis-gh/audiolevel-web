@@ -77,27 +77,27 @@
 
 <div class="space-y-3">
   {#if activeItems.length === 0}
-    <div class="text-center py-8 text-gray-500">
-      <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+      <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
       </svg>
       <p class="text-sm">No recent downloads</p>
-      <p class="text-xs text-gray-400 mt-1">Processed files will appear here</p>
+      <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Processed files will appear here</p>
     </div>
   {:else}
     {#each activeItems as item (item.id)}
       <div
-        class="bg-white rounded-lg border border-gray-200 p-4 transition-all hover:shadow-sm
-          {isExpiringSoon(item.expiresAt) ? 'border-orange-200 bg-orange-50' : ''}"
+        class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition-all hover:shadow-sm
+          {isExpiringSoon(item.expiresAt) ? 'border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20' : ''}"
       >
         <div class="flex items-start gap-3">
           <!-- Icon -->
           <div
             class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
-              {isExpiringSoon(item.expiresAt) ? 'bg-orange-100' : 'bg-gray-100'}"
+              {isExpiringSoon(item.expiresAt) ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-gray-100 dark:bg-gray-700'}"
           >
             <svg
-              class="w-5 h-5 {isExpiringSoon(item.expiresAt) ? 'text-orange-500' : 'text-gray-500'}"
+              class="w-5 h-5 {isExpiringSoon(item.expiresAt) ? 'text-orange-500 dark:text-orange-400' : 'text-gray-500 dark:text-gray-400'}"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -109,15 +109,15 @@
           <!-- Content -->
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <p class="font-medium text-gray-900 truncate text-sm" title={item.fileName}>
+              <p class="font-medium text-gray-900 dark:text-gray-100 truncate text-sm" title={item.fileName}>
                 {item.fileName}
               </p>
-              <span class="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded uppercase">
+              <span class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs rounded uppercase">
                 {item.outputFormat}
               </span>
             </div>
 
-            <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
+            <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
               <span>{item.preset}</span>
               {#if item.fileSize}
                 <span>{formatFileSize(item.fileSize)}</span>
@@ -133,7 +133,7 @@
             <!-- Expiration Timer -->
             <div class="flex items-center gap-1 mt-2">
               <svg
-                class="w-3.5 h-3.5 {isExpiringSoon(item.expiresAt) ? 'text-orange-500' : 'text-gray-400'}"
+                class="w-3.5 h-3.5 {isExpiringSoon(item.expiresAt) ? 'text-orange-500 dark:text-orange-400' : 'text-gray-400 dark:text-gray-500'}"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -141,7 +141,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span
-                class="text-xs {isExpiringSoon(item.expiresAt) ? 'text-orange-600 font-medium' : 'text-gray-400'}"
+                class="text-xs {isExpiringSoon(item.expiresAt) ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-gray-400 dark:text-gray-500'}"
               >
                 Expires in {formatTimeRemaining(item.expiresAt)}
               </span>
@@ -153,7 +153,7 @@
             {#if onViewDetails}
               <button
                 onclick={() => onViewDetails(item)}
-                class="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 title="View details"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -163,7 +163,7 @@
             {/if}
             <button
               onclick={() => onDownload(item.downloadUrl, item.fileName)}
-              class="p-2 text-primary-500 hover:text-primary-600 transition-colors"
+              class="p-2 text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
               title="Download"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

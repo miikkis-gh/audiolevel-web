@@ -41,11 +41,11 @@
       {/if}
       <span class="relative inline-flex rounded-full h-2.5 w-2.5 {statusColor}"></span>
     </span>
-    <span class="text-xs text-gray-500">{statusText}</span>
+    <span class="text-xs text-gray-500 dark:text-gray-400">{statusText}</span>
   </div>
 
   {#if showError}
-    <span class="text-xs text-red-500" title={$lastError ?? ''}>
+    <span class="text-xs text-red-500 dark:text-red-400" title={$lastError ?? ''}>
       {$lastError}
     </span>
   {/if}

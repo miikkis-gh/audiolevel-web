@@ -147,7 +147,7 @@
   {#if !selectedFile}
     <div
       class="border-2 border-dashed rounded-lg p-8 md:p-12 text-center transition-all cursor-pointer
-        {dragOver ? 'border-primary-500 bg-primary-50 scale-[1.02]' : 'border-gray-300 hover:border-primary-400 hover:bg-gray-50'}
+        {dragOver ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 scale-[1.02]' : 'border-gray-300 dark:border-gray-600 hover:border-primary-400 hover:bg-gray-50 dark:hover:bg-gray-800'}
         {disabled ? 'opacity-50 cursor-not-allowed' : ''}"
       ondragover={handleDragOver}
       ondragleave={handleDragLeave}
@@ -167,33 +167,33 @@
       />
 
       <div class="flex flex-col items-center">
-        <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-          <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+          <svg class="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
         </div>
-        <p class="text-gray-700 font-medium mb-1">Drop your audio file here</p>
-        <p class="text-gray-500 text-sm mb-3">or click to browse</p>
+        <p class="text-gray-700 dark:text-gray-300 font-medium mb-1">Drop your audio file here</p>
+        <p class="text-gray-500 dark:text-gray-400 text-sm mb-3">or click to browse</p>
         <div class="flex flex-wrap justify-center gap-2">
           {#each ['WAV', 'MP3', 'FLAC', 'AAC', 'OGG'] as format}
-            <span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">{format}</span>
+            <span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs rounded">{format}</span>
           {/each}
         </div>
-        <p class="text-gray-400 text-xs mt-3">Maximum file size: 100MB</p>
+        <p class="text-gray-400 dark:text-gray-500 text-xs mt-3">Maximum file size: 100MB</p>
       </div>
     </div>
   {:else}
     <!-- Selected File Display -->
-    <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
       <div class="flex items-start gap-4">
-        <div class="w-12 h-12 rounded-lg bg-primary-100 flex items-center justify-center flex-shrink-0">
-          <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="w-12 h-12 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
           </svg>
         </div>
         <div class="flex-1 min-w-0">
-          <p class="font-medium text-gray-900 truncate" title={selectedFile.name}>{selectedFile.name}</p>
-          <div class="flex flex-wrap gap-3 mt-1 text-sm text-gray-500">
+          <p class="font-medium text-gray-900 dark:text-gray-100 truncate" title={selectedFile.name}>{selectedFile.name}</p>
+          <div class="flex flex-wrap gap-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
             <span class="flex items-center gap-1">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -210,7 +210,7 @@
         </div>
         <button
           onclick={clearFile}
-          class="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+          class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           title="Remove file"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -223,17 +223,17 @@
 
   <!-- Validation Error -->
   {#if validationError}
-    <div class="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-      <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+      <svg class="w-5 h-5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
-      <p class="text-sm text-red-700">{validationError}</p>
+      <p class="text-sm text-red-700 dark:text-red-300">{validationError}</p>
     </div>
   {/if}
 
   <!-- Preset Selection -->
   <div>
-    <label class="block text-sm font-medium text-gray-700 mb-3">Normalization Preset</label>
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Normalization Preset</label>
     <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
       {#each presets as preset}
         <button
@@ -241,8 +241,8 @@
           onclick={() => onPresetChange(preset.id)}
           class="relative p-3 rounded-lg border-2 text-left transition-all
             {selectedPreset === preset.id
-              ? 'border-primary-500 bg-primary-50'
-              : 'border-gray-200 hover:border-gray-300 bg-white'}
+              ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+              : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 bg-white dark:bg-gray-800'}
             {disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
           {disabled}
         >
@@ -253,15 +253,15 @@
               </svg>
             </div>
           {/if}
-          <p class="font-medium text-gray-900 text-sm">{preset.name}</p>
-          <p class="text-xs text-gray-500 mt-0.5">{preset.targetLufs} LUFS</p>
+          <p class="font-medium text-gray-900 dark:text-gray-100 text-sm">{preset.name}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{preset.targetLufs} LUFS</p>
         </button>
       {/each}
     </div>
     {#if selectedPresetDetails}
-      <p class="text-sm text-gray-500 mt-2">
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">
         {selectedPresetDetails.description}
-        <span class="text-gray-400">
+        <span class="text-gray-400 dark:text-gray-500">
           (True Peak: {selectedPresetDetails.truePeak} dB)
         </span>
       </p>
@@ -270,7 +270,7 @@
 
   <!-- Output Format Selection -->
   <div>
-    <label class="block text-sm font-medium text-gray-700 mb-3">Output Format</label>
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Output Format</label>
     <div class="flex flex-wrap gap-2">
       {#each OUTPUT_FORMATS as format}
         <button
@@ -278,8 +278,8 @@
           onclick={() => (outputFormat = format.id)}
           class="px-4 py-2 rounded-lg border-2 text-sm transition-all
             {outputFormat === format.id
-              ? 'border-primary-500 bg-primary-50 text-primary-700'
-              : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'}
+              ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400'
+              : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500 bg-white dark:bg-gray-800'}
             {disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
           {disabled}
         >
@@ -287,7 +287,7 @@
         </button>
       {/each}
     </div>
-    <p class="text-xs text-gray-400 mt-2">
+    <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">
       {OUTPUT_FORMATS.find((f) => f.id === outputFormat)?.description}
     </p>
   </div>
