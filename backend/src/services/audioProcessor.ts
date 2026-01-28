@@ -309,6 +309,7 @@ export async function normalizeAudio(
       success: true,
       outputPath: options.outputPath,
       duration,
+      processingType: 'ffmpeg-normalize' as const,
       inputAnalysis: inputAnalysis ?? undefined,
       outputAnalysis: outputAnalysis
         ? {
@@ -450,6 +451,13 @@ async function processMasteringPreset(
       success: true,
       outputPath: options.outputPath,
       duration,
+      // Identify which processing pipeline was used
+      processingType: 'mastering-pipeline' as const,
+      // Include mastering decisions for verification
+      masteringDecisions: masterResult.decisions,
+      // Include filter chain for debugging
+      filterChain: masterResult.filterChain,
+      // Analysis data
       inputAnalysis: masterResult.inputAnalysis ? {
         inputLufs: masterResult.inputAnalysis.integratedLufs,
         inputTruePeak: masterResult.inputAnalysis.truePeak,

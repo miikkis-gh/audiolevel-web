@@ -236,10 +236,14 @@ export async function analyzeLoudnessForMastering(inputPath: string): Promise<Ma
       return null;
     }
 
-    // Parse EBU R128 metrics
-    const integratedMatch = stderr.match(/I:\s*(-?[\d.]+)\s*LUFS/);
-    const lraMatch = stderr.match(/LRA:\s*(-?[\d.]+)\s*LU/);
-    const truePeakMatch = stderr.match(/Peak:\s*(-?[\d.]+)\s*dBFS/);
+    // Extract Summary section to avoid matching progress line placeholder values (-70 LUFS)
+    const summaryMatch = stderr.match(/Summary:[\s\S]*$/);
+    const summarySection = summaryMatch ? summaryMatch[0] : '';
+
+    // Parse EBU R128 metrics from Summary section only
+    const integratedMatch = summarySection.match(/I:\s*(-?[\d.]+)\s*LUFS/);
+    const lraMatch = summarySection.match(/LRA:\s*(-?[\d.]+)\s*LU/);
+    const truePeakMatch = summarySection.match(/Peak:\s*(-?[\d.]+)\s*dBFS/);
 
     // Parse astats metrics (from first channel or overall)
     const rmsMatch = stderr.match(/RMS level dB:\s*(-?[\d.]+)/);
@@ -251,6 +255,14 @@ export async function analyzeLoudnessForMastering(inputPath: string): Promise<Ma
     const rmsDb = rmsMatch ? parseFloat(rmsMatch[1]) : -20;
     const peakDb = peakMatch ? parseFloat(peakMatch[1]) : -1;
     const crestFactor = Math.abs(peakDb - rmsDb);
+
+    // Sanity check: if LUFS is still -70 or lower, parsing likely failed
+    if (integratedLufs <= -60) {
+      log.warn({
+        integratedLufs,
+        stderrTail: stderr.slice(-1000)
+      }, 'LUFS parsing may have failed - value suspiciously low');
+    }
 
     log.info({
       integratedLufs,
@@ -293,7 +305,7 @@ export function buildMasteringFilterChain(analysis: MasteringAnalysis): {
   // Compression decision: enable if crest factor > 10 AND LRA > 5
   if (analysis.crestFactor > 10 && analysis.lra > 5) {
     compressionEnabled = true;
-    filters.push('acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200:makeup=0');
+    filters.push('acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200');
   }
 
   // Saturation decision: enable if LUFS < -12 AND true peak < -1.5
