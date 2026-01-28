@@ -300,7 +300,7 @@
         <button
           type="button"
           onclick={() => (outputFormat = format.id)}
-          class="glass-button px-5 py-2.5 rounded-xl text-sm group animate-entrance
+          class="glass-button relative px-5 py-2.5 rounded-xl text-sm group animate-entrance
             {outputFormat === format.id
               ? 'bg-gradient-to-r from-cyan-500/20 to-sky-500/20 border-cyan-500/30 text-cyan-300'
               : 'text-white/60 hover:text-white/90 hover:bg-white/[0.03]'}
@@ -308,6 +308,17 @@
           style="animation-delay: {i * 0.05}s"
           {disabled}
         >
+          <!-- Checkmark indicator -->
+          {#if outputFormat === format.id}
+            <div class="absolute top-1.5 right-1.5">
+              <div class="w-4 h-4 rounded-full bg-cyan-500 flex items-center justify-center">
+                <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          {/if}
+
           <span class="relative z-10">{format.name}</span>
         </button>
       {/each}

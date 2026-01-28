@@ -37,7 +37,7 @@ export const PRESET_CONFIGS: Record<Preset, PresetConfig> = {
   },
   mastering: {
     name: 'Mastering',
-    description: 'Adaptive mastering with dynamic compression, saturation, and limiting. Target: -9 LUFS, -0.5 dBTP (safe)',
+    description: 'Optimized for music (True Peak: -0.5 dB)\nRequires high-quality source files for optimal results',
     targetLufs: -9,
     truePeak: -0.5,  // Updated from -0.3 to safer value
     loudnessRange: 5,
