@@ -151,7 +151,7 @@ body {
   overflow: hidden;
 }
 
-/* Subtle shine effect on cards */
+/* Subtle shine effect on cards  
 .glass-card::before {
   content: '';
   position: absolute;
@@ -172,7 +172,7 @@ body {
 .glass-card:hover::before {
   left: 100%;
 }
-
+*/
 .glass-card-hover {
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
