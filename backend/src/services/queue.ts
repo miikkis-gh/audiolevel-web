@@ -47,6 +47,23 @@ export interface AudioJobResult {
   outputPath?: string;
   error?: string;
   duration?: number;
+  // Mastering pipeline metadata
+  processingType?: 'ffmpeg-normalize' | 'mastering-pipeline';
+  masteringDecisions?: {
+    compressionEnabled: boolean;
+    saturationEnabled: boolean;
+  };
+  filterChain?: string;
+  inputAnalysis?: {
+    inputLufs: number;
+    inputTruePeak: number;
+    inputLoudnessRange: number;
+  };
+  outputAnalysis?: {
+    inputLufs: number;
+    inputTruePeak: number;
+    inputLoudnessRange: number;
+  };
 }
 
 let audioQueue: Queue<AudioJobData, AudioJobResult> | null = null;

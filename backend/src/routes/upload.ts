@@ -10,7 +10,7 @@ import { uploadRateLimiter } from '../middleware/rateLimit';
 import { getRateLimitStatus, getClientIp } from '../services/rateLimit';
 import { hasEnoughSpace } from '../services/diskMonitor';
 import { env } from '../config/env';
-import { logger } from '../utils/logger';
+import { logger, createChildLogger } from '../utils/logger';
 
 const upload = new Hono();
 
@@ -147,13 +147,23 @@ upload.get('/job/:id', async (c) => {
     jobId: status.id,
     status: status.state,
     progress: status.progress,
-    result: status.result,
+    result: status.result ? {
+      success: status.result.success,
+      outputPath: status.result.outputPath,
+      duration: status.result.duration,
+      processingType: status.result.processingType,
+      masteringDecisions: status.result.masteringDecisions,
+      filterChain: status.result.filterChain,
+      inputAnalysis: status.result.inputAnalysis,
+      outputAnalysis: status.result.outputAnalysis,
+    } : undefined,
     error: status.failedReason,
   });
 });
 
 upload.get('/job/:id/download', async (c) => {
   const jobId = c.req.param('id');
+  const log = createChildLogger({ jobId, route: 'download' });
   const status = await getJobStatus(jobId);
 
   if (!status) {
@@ -171,13 +181,29 @@ upload.get('/job/:id/download', async (c) => {
     throw new AppError(404, 'File no longer available', 'FILE_EXPIRED');
   }
 
-  const filename = status.data.originalName.replace(/\.[^/.]+$/, '') + '-normalized' +
+  const fileSize = file.size;
+  const contentType = file.type || 'application/octet-stream';
+  const downloadFilename = status.data.originalName.replace(/\.[^/.]+$/, '') + '-normalized' +
     status.result.outputPath.substring(status.result.outputPath.lastIndexOf('.'));
+
+  // Log download verification details
+  log.info({
+    jobId,
+    outputPath: status.result.outputPath,
+    fileSize,
+    contentType,
+    downloadFilename,
+    preset: status.data?.preset,
+    processingType: status.result.processingType,
+    masteringDecisions: status.result.masteringDecisions,
+    filterChain: status.result.filterChain,
+  }, 'Serving download file');
 
   return new Response(file, {
     headers: {
-      'Content-Type': file.type || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Type': contentType,
+      'Content-Disposition': `attachment; filename="${downloadFilename}"`,
+      'Content-Length': String(fileSize),
     },
   });
 });
