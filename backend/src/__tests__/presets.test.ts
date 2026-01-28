@@ -90,7 +90,8 @@ describe('Preset Configurations', () => {
   test('Mastering preset has correct values', () => {
     const mastering = PRESET_CONFIGS.mastering;
     expect(mastering.targetLufs).toBe(-9);
-    expect(mastering.truePeak).toBe(-0.3);
+    expect(mastering.truePeak).toBe(-0.5);  // Updated to safer value
+    expect(mastering.loudnessRange).toBe(5);
   });
 
   test('Audiobook preset has correct values', () => {

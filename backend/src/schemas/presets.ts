@@ -37,9 +37,12 @@ export const PRESET_CONFIGS: Record<Preset, PresetConfig> = {
   },
   mastering: {
     name: 'Mastering',
-    description: 'Loud masters for maximum impact',
+    description: 'Adaptive mastering with dynamic compression, saturation, and limiting. Target: -9 LUFS, -0.5 dBTP (safe)',
     targetLufs: -9,
-    truePeak: -0.3,
+    truePeak: -0.5,  // Updated from -0.3 to safer value
+    loudnessRange: 5,
+    // Note: These values are informational. The actual processing
+    // uses adaptive decisions based on input analysis.
   },
   audiobook: {
     name: 'Audiobook',
