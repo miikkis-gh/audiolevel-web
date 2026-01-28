@@ -37,7 +37,7 @@ export const PRESET_CONFIGS: Record<Preset, PresetConfig> = {
   },
   mastering: {
     name: 'Mastering',
-    description: 'Optimized for music (True Peak: -0.5 dB)\nRequires high-quality source files for optimal results',
+    description: 'Optimized for music. Requires high-quality source files for optimal results',
     targetLufs: -9,
     truePeak: -0.5,  // Updated from -0.3 to safer value
     loudnessRange: 5,
