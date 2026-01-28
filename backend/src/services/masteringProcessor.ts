@@ -305,7 +305,7 @@ export function buildMasteringFilterChain(analysis: MasteringAnalysis): {
   // Compression decision: enable if crest factor > 10 AND LRA > 5
   if (analysis.crestFactor > 10 && analysis.lra > 5) {
     compressionEnabled = true;
-    filters.push('acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200:makeup=0');
+    filters.push('acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200');
   }
 
   // Saturation decision: enable if LUFS < -12 AND true peak < -1.5
