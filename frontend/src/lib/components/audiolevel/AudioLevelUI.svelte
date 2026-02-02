@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
+  import JSZip from 'jszip';
   import ParticleSphere from './ParticleSphere.svelte';
   import SingleReport from './SingleReport.svelte';
   import BatchReport from './BatchReport.svelte';
@@ -42,6 +43,8 @@
   let rejectMsg = $state('');
   let rejectPulse = $state(false);
   let errorMsg = $state('');
+  let downloadDropdownOpen = $state(false);
+  let zipping = $state(false);
 
   // Job tracking
   let currentJobId = $state<string | null>(null);
@@ -282,6 +285,21 @@
     unsubscribeProgress?.();
     unsubscribeResults?.();
     disconnectWebSocket();
+  });
+
+  // Close dropdown when clicking outside
+  $effect(() => {
+    if (!downloadDropdownOpen) return;
+
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.download-dropdown')) {
+        downloadDropdownOpen = false;
+      }
+    }
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
   });
 
   // Single-file processing - no mock needed, progress comes from WebSocket
@@ -575,6 +593,7 @@
   }
 
   function handleBatchDownload(index?: number) {
+    downloadDropdownOpen = false;
     if (index !== undefined) {
       const file = batchFiles[index];
       if (file?.jobId) {
@@ -590,6 +609,40 @@
           triggerDownload(url, file.name);
         }, i * 300); // 300ms delay between each download
       });
+    }
+  }
+
+  async function handleBatchDownloadZip() {
+    downloadDropdownOpen = false;
+    zipping = true;
+
+    try {
+      const zip = new JSZip();
+      const completedFiles = batchFiles.filter((f) => f.jobId && f.fileState === 'complete');
+
+      // Fetch all files and add to zip
+      await Promise.all(
+        completedFiles.map(async (file) => {
+          const url = file.downloadUrl || getDownloadUrl(file.jobId!);
+          const response = await fetch(url);
+          if (response.ok) {
+            const blob = await response.blob();
+            zip.file(file.name, blob);
+          }
+        })
+      );
+
+      // Generate and download ZIP
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const zipUrl = URL.createObjectURL(zipBlob);
+      triggerDownload(zipUrl, 'audiolevel-processed.zip');
+      URL.revokeObjectURL(zipUrl);
+    } catch (err) {
+      console.error('Failed to create ZIP:', err);
+      errorMsg = 'Failed to create ZIP file';
+      setTimeout(() => (errorMsg = ''), 3000);
+    } finally {
+      zipping = false;
     }
   }
 
@@ -805,14 +858,47 @@
     {#if mode === 'batch-complete'}
       <div class="complete-area">
         <div class="file-name">{batchFiles.filter(f => f.fileState === 'complete').length} of {batchFiles.length} files processed</div>
-        <button class="download-btn" onclick={() => handleBatchDownload()}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Download All
-        </button>
+        <div class="download-dropdown">
+          <button class="download-btn" onclick={() => handleBatchDownload()} disabled={zipping}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            {zipping ? 'Creating ZIP...' : 'Download All'}
+          </button>
+          <button
+            class="download-btn dropdown-toggle"
+            onclick={() => (downloadDropdownOpen = !downloadDropdownOpen)}
+            disabled={zipping}
+            aria-label="Download options"
+            aria-expanded={downloadDropdownOpen}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {#if downloadDropdownOpen}
+            <div class="dropdown-menu">
+              <button onclick={() => handleBatchDownload()}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Individual files
+              </button>
+              <button onclick={handleBatchDownloadZip}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  <line x1="12" y1="11" x2="12" y2="17" />
+                  <line x1="9" y1="14" x2="15" y2="14" />
+                </svg>
+                Download as ZIP
+              </button>
+            </div>
+          {/if}
+        </div>
         <div>
           <button class="reset-btn" onclick={reset}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1102,6 +1188,65 @@
   .download-btn:focus-visible {
     outline: 2px solid rgba(80, 210, 180, 0.5);
     outline-offset: 2px;
+  }
+
+  .download-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .download-dropdown {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .download-dropdown .download-btn:first-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right: none;
+  }
+
+  .dropdown-toggle {
+    padding: 10px 12px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: 1px solid rgba(80, 210, 180, 0.15);
+  }
+
+  .dropdown-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 160px;
+    background: rgba(20, 20, 32, 0.98);
+    border: 1px solid rgba(80, 210, 180, 0.2);
+    border-radius: 12px;
+    padding: 6px;
+    z-index: 100;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .dropdown-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    text-align: left;
+  }
+
+  .dropdown-menu button:hover {
+    background: rgba(80, 210, 180, 0.1);
+    color: rgba(80, 210, 180, 0.9);
   }
 
   .reset-btn {

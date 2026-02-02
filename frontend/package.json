@@ -10,6 +10,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
+    "jszip": "^3.10.1",
     "wavesurfer.js": "^7.8.0"
   },
   "devDependencies": {
