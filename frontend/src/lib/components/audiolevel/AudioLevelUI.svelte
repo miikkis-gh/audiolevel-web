@@ -1117,8 +1117,8 @@
   .idle-label {
     font-family: 'Outfit', sans-serif;
     font-weight: 300;
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.22);
+    font-size: 17px;
+    color: rgba(255, 255, 255, 0.35);
     text-align: center;
     letter-spacing: 0.5px;
     animation: fadeUp 0.5s ease-out;
