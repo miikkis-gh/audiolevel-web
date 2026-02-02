@@ -134,6 +134,7 @@
             onclick={stop}
             class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
             disabled={isLoading}
+            aria-label="Stop"
           >
             <svg class="w-4 h-4 text-gray-700" fill="currentColor" viewBox="0 0 24 24">
               <path d="M6 6h12v12H6z" />

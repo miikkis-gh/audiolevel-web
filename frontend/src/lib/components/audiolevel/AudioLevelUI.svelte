@@ -647,6 +647,7 @@
 
 <div
   class="audiolevel-root"
+  role="application"
   ondrop={handleDrop}
   ondragenter={handleDragEnter}
   ondragover={handleDragOver}
@@ -851,9 +852,10 @@
       }}
       role="presentation"
     ></div>
-    <div class="report-panel" role="dialog" aria-label="Analysis report" onkeydown={handleReportKeyDown}>
+    <div class="report-panel" role="dialog" aria-label="Analysis report" tabindex="-1" onkeydown={handleReportKeyDown}>
       <button
         class="report-close"
+        aria-label="Close report"
         onclick={() => {
           showReport = false;
           overrideOpen = false;

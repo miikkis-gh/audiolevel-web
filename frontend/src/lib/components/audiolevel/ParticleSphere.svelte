@@ -240,7 +240,7 @@
   style={coreStyle}
   onanimationend={onanimationend}
 >
-  <canvas bind:this={canvasEl} class="particle-canvas" />
+  <canvas bind:this={canvasEl} class="particle-canvas"></canvas>
   <div class="sphere-highlight"></div>
 </div>
 
