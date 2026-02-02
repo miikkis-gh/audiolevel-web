@@ -568,9 +568,9 @@
 
   function handleDownload() {
     if (currentJobId && currentDownloadUrl) {
-      window.open(currentDownloadUrl, '_blank');
+      triggerDownload(currentDownloadUrl, fileName);
     } else if (currentJobId) {
-      window.open(getDownloadUrl(currentJobId), '_blank');
+      triggerDownload(getDownloadUrl(currentJobId), fileName);
     }
   }
 
@@ -579,17 +579,29 @@
       const file = batchFiles[index];
       if (file?.jobId) {
         const url = file.downloadUrl || getDownloadUrl(file.jobId);
-        window.open(url, '_blank');
+        triggerDownload(url, file.name);
       }
     } else {
-      // Download all
-      batchFiles.forEach((file) => {
-        if (file.jobId && file.fileState === 'complete') {
-          const url = file.downloadUrl || getDownloadUrl(file.jobId);
-          window.open(url, '_blank');
-        }
+      // Download all - stagger to avoid popup blocker
+      const completedFiles = batchFiles.filter((f) => f.jobId && f.fileState === 'complete');
+      completedFiles.forEach((file, i) => {
+        setTimeout(() => {
+          const url = file.downloadUrl || getDownloadUrl(file.jobId!);
+          triggerDownload(url, file.name);
+        }, i * 300); // 300ms delay between each download
       });
     }
+  }
+
+  // Use anchor element to trigger download (bypasses popup blocker)
+  function triggerDownload(url: string, filename: string) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'download';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   function navigateBatchReport(index: number) {
