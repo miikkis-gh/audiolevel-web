@@ -317,6 +317,9 @@
   // The progress is updated via the jobProgress subscription in onMount
 
   // Batch completion → merge effect
+  // Use a ref to track the timeout so it's not cleared on re-runs
+  let mergeTimeout: ReturnType<typeof setTimeout> | null = null;
+
   $effect(() => {
     if (
       mode === 'batch' &&
@@ -325,8 +328,8 @@
       batchFiles.every((f) => f.progress >= 100 || f.fileState === 'error')
     ) {
       mergeTriggered = true;
-      const t = setTimeout(() => (mode = 'merging'), 800);
-      return () => clearTimeout(t);
+      // Don't return cleanup - we want the timeout to complete even if effect re-runs
+      mergeTimeout = setTimeout(() => (mode = 'merging'), 800);
     }
   });
 
@@ -503,6 +506,7 @@
     processedCompletions = new Set();
     if (rejectTimer) clearTimeout(rejectTimer);
     if (overrideTimer) clearTimeout(overrideTimer);
+    if (mergeTimeout) clearTimeout(mergeTimeout);
     mergeTriggered = false;
   }
 
