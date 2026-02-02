@@ -63,10 +63,10 @@ test.describe('Batch Upload', () => {
     // Should show batch processing UI, individual file entries, or progress
     // The UI may show mini spheres, file names, or "X of Y complete" text
     const hasBatchUI =
-      (await page.locator('text=/batch/i').isVisible()) ||
+      (await page.locator('text=/batch/i').first().isVisible()) ||
       (await page.locator('[data-testid="batch-file"]').count()) >= 1 ||
       (await page.locator('text=/batch-test/i').first().isVisible()) ||
-      (await page.locator('text=/of.*complete/i').isVisible()) ||
+      (await page.locator('text=/of.*complete/i').first().isVisible()) ||
       (await page.locator('.mini-label').count()) >= 1 ||
       (await page.locator('text=/%/').first().isVisible());
 
