@@ -1,14 +1,6 @@
 # AudioLevel
 
-```
-                    _             _ _       _                   _
-                   / \  _   _  __| (_) ___ | |    _____   _____| |
-                  / _ \| | | |/ _` | |/ _ \| |   / _ \ \ / / _ \ |
-                 / ___ \ |_| | (_| | | (_) | |__|  __/\ V /  __/ |
-                /_/   \_\__,_|\__,_|_|\___/|_____\___| \_/ \___|_|
-
-                  Professional Audio Normalization for Everyone
-```
+**Professional Audio Normalization for Everyone**
 
 A free, web-based audio normalization tool. Upload your audio, pick a preset, and download broadcast-ready files. No login required. No data retained.
 
