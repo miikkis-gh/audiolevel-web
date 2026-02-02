@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import ParticleSphere from './ParticleSphere.svelte';
   import SingleReport from './SingleReport.svelte';
   import BatchReport from './BatchReport.svelte';
@@ -101,16 +102,20 @@
   // Batch processing simulation effect
   $effect(() => {
     if (mode !== 'batch') return;
-    batchSpeeds = batchFiles.map(() => 0.5 + Math.random() * 1.4);
-    batchStarts = batchFiles.map((_, i) => Date.now() + i * 250 + Math.random() * 400);
+
+    // Use untrack to read batchFiles without creating a dependency
+    const files = untrack(() => batchFiles);
+    batchSpeeds = files.map(() => 0.5 + Math.random() * 1.4);
+    batchStarts = files.map((_, i) => Date.now() + i * 250 + Math.random() * 400);
 
     const interval = setInterval(() => {
       const now = Date.now();
-      if (batchFiles.every((f) => f.progress >= 100)) {
+      const currentFiles = untrack(() => batchFiles);
+      if (currentFiles.every((f) => f.progress >= 100)) {
         clearInterval(interval);
         return;
       }
-      batchFiles = batchFiles.map((f, i) => {
+      batchFiles = currentFiles.map((f, i) => {
         if (f.progress >= 100) return f;
         if (now < batchStarts[i]) return f;
         const np = Math.min(100, f.progress + batchSpeeds[i] * (0.5 + Math.random() * 0.9));
