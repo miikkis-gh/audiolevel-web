@@ -37,7 +37,9 @@ describe('WebSocket Types', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.type).toBe('subscribe');
-        expect(result.data.jobId).toBe('job-123');
+        if (result.data.type === 'subscribe') {
+          expect(result.data.jobId).toBe('job-123');
+        }
       }
     });
 
@@ -49,7 +51,9 @@ describe('WebSocket Types', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.type).toBe('unsubscribe');
-        expect(result.data.jobId).toBe('job-456');
+        if (result.data.type === 'unsubscribe') {
+          expect(result.data.jobId).toBe('job-456');
+        }
       }
     });
 

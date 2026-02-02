@@ -84,7 +84,7 @@ const app = new Hono();
 app.onError((err, c) => {
   const statusCode = (err as { statusCode?: number }).statusCode || 500;
   const code = (err as { code?: string }).code || 'INTERNAL_ERROR';
-  return c.json({ error: err.message, code }, statusCode);
+  return c.json({ error: err.message, code }, statusCode as 400 | 404 | 500);
 });
 app.route('/api/upload', upload);
 
