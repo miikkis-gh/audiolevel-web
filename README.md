@@ -108,9 +108,9 @@ Visit `http://localhost:5173` for the frontend.
 - [FFmpeg](https://ffmpeg.org) + ffmpeg-normalize — Audio processing
 
 **Frontend**
-- [Svelte 5](https://svelte.dev) — UI framework
-- [Vite](https://vitejs.dev) — Build tool
-- [TailwindCSS](https://tailwindcss.com) — Styling
+- [Svelte 5](https://svelte.dev) — UI framework with runes
+- [Vite 7](https://vitejs.dev) — Build tool
+- [Tailwind CSS 4](https://tailwindcss.com) — CSS-first styling
 
 ---
 
@@ -225,7 +225,15 @@ audiolevel/
 ├── frontend/
 │   ├── src/
 │   │   ├── App.svelte       # Main component
-│   │   ├── lib/components/  # UI components
+│   │   ├── app.css          # Tailwind CSS 4 theme
+│   │   ├── lib/components/
+│   │   │   ├── audiolevel/  # Audio processing UI
+│   │   │   │   ├── AudioLevelUI.svelte
+│   │   │   │   ├── ParticleSphere.svelte
+│   │   │   │   ├── BatchReport.svelte
+│   │   │   │   ├── SingleReport.svelte
+│   │   │   │   └── OverrideSelector.svelte
+│   │   │   └── ...          # Other components
 │   │   └── stores/          # State management
 │   └── package.json
 ├── docs/                    # Documentation
