@@ -15,7 +15,6 @@ import { logger, createChildLogger } from '../utils/logger';
 const upload = new Hono();
 
 const ALLOWED_EXTENSIONS = new Set(['.wav', '.mp3', '.flac', '.aac', '.ogg', '.m4a']);
-const ALLOWED_OUTPUT_FORMATS = new Set(['wav', 'mp3', 'flac', 'aac', 'ogg']);
 
 // Rate limit status endpoint (no rate limiting applied)
 upload.get('/rate-limit', async (c) => {
@@ -52,7 +51,6 @@ upload.post('/', async (c) => {
 
   const file = body['file'];
   const presetParam = body['preset'];
-  const outputFormatParam = body['outputFormat'];
 
   if (!file || !(file instanceof File)) {
     throw new AppError(400, 'No file provided', 'NO_FILE');
@@ -79,16 +77,14 @@ upload.post('/', async (c) => {
   const presetResult = uploadRequestSchema.safeParse({ preset: presetParam });
   const preset: Preset = presetResult.success ? presetResult.data.preset : 'podcast';
 
-  // Validate output format
-  const outputFormat = typeof outputFormatParam === 'string' && ALLOWED_OUTPUT_FORMATS.has(outputFormatParam)
-    ? outputFormatParam
-    : 'wav';
-
   // Check file extension
   const ext = '.' + (file.name.split('.').pop()?.toLowerCase() || '');
   if (!ALLOWED_EXTENSIONS.has(ext)) {
     throw new AppError(400, 'Unsupported file type', 'INVALID_FILE_TYPE');
   }
+
+  // Output format matches input format (no conversion)
+  const outputFormat = ext.slice(1); // Remove leading dot
 
   // Validate file type via magic bytes
   const arrayBuffer = await file.arrayBuffer();
