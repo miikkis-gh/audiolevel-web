@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi, beforeEach } from 'vitest';
 
 // Mock import.meta.env
 vi.stubGlobal('import.meta', {
