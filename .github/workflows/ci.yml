@@ -68,7 +68,7 @@ jobs:
 
       - name: Run frontend tests
         working-directory: frontend
-        run: bun test
+        run: bunx vitest run
 
       - name: Run type check
         working-directory: frontend
