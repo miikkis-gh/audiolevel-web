@@ -123,7 +123,7 @@
     <!-- Glow effect for active progress -->
     {#if status === 'processing'}
       <div
-        class="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-indigo-500/50 to-violet-500/50 blur-sm"
+        class="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-indigo-500/50 to-violet-500/50 blur-xs"
         style="width: {$progress.percent}%"
       ></div>
     {/if}
