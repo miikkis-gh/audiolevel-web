@@ -107,7 +107,7 @@ initializeServices().catch((err) => {
 // Export server configuration with WebSocket support
 export default {
   port: env.PORT,
-  fetch(req: Request, server: import('bun').Server) {
+  fetch(req: Request, server: import('bun').Server<WebSocketData>) {
     // Handle WebSocket upgrade
     const url = new URL(req.url);
     if (url.pathname === '/ws') {

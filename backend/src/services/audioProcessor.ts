@@ -32,9 +32,15 @@ export interface ProcessingResult {
   outputPath?: string;
   error?: string;
   duration?: number;
+  processingType?: 'ffmpeg-normalize' | 'direct-copy' | 'mastering-pipeline';
   inputAnalysis?: LoudnessAnalysis;
   outputAnalysis?: LoudnessAnalysis;
   metadata?: AudioMetadata;
+  filterChain?: string;
+  masteringDecisions?: {
+    compressionEnabled: boolean;
+    saturationEnabled: boolean;
+  };
 }
 
 export interface ProcessingCallbacks {

@@ -54,7 +54,7 @@ describe('MIME Type Validation', () => {
       'audio/x-wav',
       'audio/x-flac',
       'audio/vorbis',
-    ];
+    ] as const;
 
     for (const type of allowedTypes) {
       expect(ALLOWED_MIME_TYPES).toContain(type);
