@@ -31,6 +31,13 @@ Thumbs.db
 # Test coverage
 coverage/
 
+# Playwright
+playwright-report/
+test-results/
+
+# Debug files
+*.har
+
 # Temporary files
 *.tmp
 *.temp
@@ -52,3 +59,7 @@ CLAUDE.md
 MILESTONES.md
 MASTERING_UPGRADE_INSTRUCTIONS.md
 MASTERING_FIXES_AND_ENHANCEMENTS.md
+CLAUDE_CODE_INSTRUCTIONS.md
+
+# Claude Code
+.claude/
