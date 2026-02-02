@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import ParticleSphere from './ParticleSphere.svelte';
   import SingleReport from './SingleReport.svelte';
   import BatchReport from './BatchReport.svelte';
@@ -11,10 +11,20 @@
     type Mode,
     type ParticleState,
     type SingleReportData,
+    type BatchReportData,
     type BatchFile,
     type OverrideType,
   } from './constants';
   import { getStageLabel, getLayout, getPositions, truncName } from './helpers';
+  import { uploadFile, getDownloadUrl, getJobStatus, type ApiError, type JobResult } from '../../../stores/api';
+  import {
+    connectWebSocket,
+    disconnectWebSocket,
+    subscribeToJob,
+    clearJobData,
+    jobProgress,
+    jobResults,
+  } from '../../../stores/websocket';
 
   // State
   let mode = $state<Mode>('idle');
@@ -31,50 +41,254 @@
   let singleReport = $state<SingleReportData>({ ...SINGLE_REPORT });
   let rejectMsg = $state('');
   let rejectPulse = $state(false);
+  let errorMsg = $state('');
+
+  // Job tracking
+  let currentJobId = $state<string | null>(null);
+  let currentDownloadUrl = $state<string | null>(null);
+  let currentPreset = $state('streaming'); // Default preset
 
   // Non-reactive refs
   let fileInput: HTMLInputElement;
   let mergeTriggered = false;
-  let batchSpeeds: number[] = [];
-  let batchStarts: number[] = [];
   let rejectTimer: ReturnType<typeof setTimeout> | null = null;
   let overrideTimer: ReturnType<typeof setTimeout> | null = null;
   let dragCount = 0;
+  let unsubscribeProgress: (() => void) | null = null;
+  let unsubscribeResults: (() => void) | null = null;
 
-  // Single-file processing effect
+  // Map preset to display name
+  const PRESET_DISPLAY_NAMES: Record<string, string> = {
+    podcast: 'Podcast / Talk',
+    broadcast: 'Broadcast',
+    youtube: 'YouTube',
+    streaming: 'Music / Song',
+    mastering: 'Music / Song',
+    audiobook: 'Audiobook',
+  };
+
+  const PRESET_STANDARDS: Record<string, string> = {
+    podcast: 'Podcast (Spotify / Apple compatible)',
+    broadcast: 'Broadcast (EBU R128)',
+    youtube: 'YouTube',
+    streaming: 'Streaming (Spotify / Apple Music / YouTube)',
+    mastering: 'Mastering (Professional)',
+    audiobook: 'Audiobook (ACX / Audible compatible)',
+  };
+
+  const PRESET_TARGETS: Record<string, string> = {
+    podcast: '-16 LUFS / -1.5 dBTP',
+    broadcast: '-23 LUFS / -2 dBTP',
+    youtube: '-14 LUFS / -1 dBTP',
+    streaming: '-14 LUFS / -1 dBTP',
+    mastering: '-9 LUFS / -0.5 dBTP',
+    audiobook: '-18 LUFS / -3 dBTP',
+  };
+
+  // Format number for display
+  function formatLufs(value: number | undefined): string {
+    if (value === undefined) return 'N/A';
+    return `${value.toFixed(1)} LUFS`;
+  }
+
+  function formatTruePeak(value: number | undefined): string {
+    if (value === undefined) return 'N/A';
+    return `${value.toFixed(1)} dBTP`;
+  }
+
+  function formatLra(value: number | undefined): string {
+    if (value === undefined) return 'N/A';
+    return `${value.toFixed(1)} LU`;
+  }
+
+  // Build report from job result
+  function buildReportFromResult(result: JobResult, preset: string): SingleReportData {
+    const detectedAs = PRESET_DISPLAY_NAMES[preset] || 'Audio';
+    const notes: string[] = [];
+
+    // Build notes based on processing
+    if (result.processingType === 'mastering-pipeline') {
+      if (result.masteringDecisions?.compressionEnabled) {
+        notes.push('Compression applied — dynamic range was high');
+      }
+      if (result.masteringDecisions?.saturationEnabled) {
+        notes.push('Saturation applied — added harmonic warmth');
+      }
+    }
+
+    if (result.inputAnalysis && result.outputAnalysis) {
+      const inputPeak = result.inputAnalysis.inputTruePeak;
+      const outputPeak = result.outputAnalysis.inputTruePeak;
+      if (inputPeak !== undefined && inputPeak > -1) {
+        notes.push(`True peak exceeded -1 dBTP (was ${inputPeak.toFixed(1)} dBTP) — limiter applied`);
+      }
+      const gainChange = (result.outputAnalysis.inputLufs || 0) - (result.inputAnalysis.inputLufs || 0);
+      if (Math.abs(gainChange) > 3) {
+        notes.push(`Gain ${gainChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(gainChange).toFixed(1)} dB`);
+      }
+    }
+
+    if (notes.length === 0) {
+      notes.push('Processing completed successfully');
+    }
+
+    return {
+      detectedAs,
+      confidence: 'HIGH',
+      reasons: [
+        { signal: `Processing type: ${result.processingType || 'standard'}`, detail: 'normalization method used' },
+        { signal: `Duration: ${result.duration ? `${(result.duration / 1000).toFixed(1)}s` : 'N/A'}`, detail: 'processing time' },
+      ],
+      before: {
+        integrated: formatLufs(result.inputAnalysis?.inputLufs),
+        truePeak: formatTruePeak(result.inputAnalysis?.inputTruePeak),
+        lra: formatLra(result.inputAnalysis?.inputLoudnessRange),
+      },
+      after: {
+        integrated: formatLufs(result.outputAnalysis?.inputLufs),
+        truePeak: formatTruePeak(result.outputAnalysis?.inputTruePeak),
+        lra: formatLra(result.outputAnalysis?.inputLoudnessRange),
+      },
+      target: PRESET_TARGETS[preset] || '-14 LUFS / -1 dBTP',
+      standard: PRESET_STANDARDS[preset] || 'Streaming',
+      notes,
+    };
+  }
+
+  // Build batch report from job result
+  function buildBatchReportFromResult(result: JobResult, preset: string): BatchReportData {
+    const single = buildReportFromResult(result, preset);
+    return {
+      type: single.detectedAs,
+      conf: single.confidence,
+      reasons: single.reasons,
+      before: single.before,
+      after: single.after,
+      target: single.target,
+      standard: single.standard,
+      notes: single.notes,
+    };
+  }
+
+  // Fetch full job details and update report
+  async function fetchAndUpdateReport(jobId: string, preset: string): Promise<JobResult | null> {
+    try {
+      const status = await getJobStatus(jobId);
+      if (status.result) {
+        return status.result;
+      }
+    } catch (err) {
+      console.error('Failed to fetch job details:', err);
+    }
+    return null;
+  }
+
+  // Track which jobs we've already processed for completion
+  let processedCompletions = new Set<string>();
+
+  // Connect WebSocket on mount
+  onMount(() => {
+    connectWebSocket();
+
+    // Subscribe to progress updates
+    unsubscribeProgress = jobProgress.subscribe(($progress: Map<string, { percent: number; stage?: string }>) => {
+      // Update single file progress
+      if (currentJobId && mode === 'processing') {
+        const jobProg = $progress.get(currentJobId);
+        if (jobProg) {
+          progress = jobProg.percent;
+        }
+      }
+
+      // Update batch file progress
+      if (mode === 'batch' || mode === 'splitting') {
+        batchFiles = batchFiles.map((f) => {
+          if (!f.jobId) return f;
+          const jobProg = $progress.get(f.jobId);
+          if (jobProg) {
+            return {
+              ...f,
+              progress: jobProg.percent,
+              fileState: jobProg.percent >= 100 ? 'complete' : jobProg.percent > 0 ? 'processing' : 'pending',
+            };
+          }
+          return f;
+        });
+      }
+    });
+
+    // Subscribe to job results
+    unsubscribeResults = jobResults.subscribe(($results: Map<string, { success: boolean; downloadUrl?: string; error?: string }>) => {
+      // Handle single file completion
+      if (currentJobId && mode === 'processing' && !processedCompletions.has(currentJobId)) {
+        const result = $results.get(currentJobId);
+        if (result) {
+          if (result.success && result.downloadUrl) {
+            processedCompletions.add(currentJobId);
+            progress = 100;
+            currentDownloadUrl = result.downloadUrl;
+
+            // Fetch full job details for report
+            fetchAndUpdateReport(currentJobId, currentPreset).then((jobResult) => {
+              if (jobResult) {
+                singleReport = buildReportFromResult(jobResult, currentPreset);
+              }
+            });
+
+            setTimeout(() => {
+              mode = 'complete';
+              setTimeout(() => (reportReady = true), 600);
+            }, 400);
+          } else if (result.error) {
+            errorMsg = result.error;
+            mode = 'idle';
+          }
+        }
+      }
+
+      // Handle batch file completion
+      if (mode === 'batch' || mode === 'splitting') {
+        batchFiles = batchFiles.map((f) => {
+          if (!f.jobId) return f;
+          const result = $results.get(f.jobId);
+          if (result) {
+            if (result.success && result.downloadUrl) {
+              // Fetch full job details for report if not already done
+              if (!processedCompletions.has(f.jobId)) {
+                processedCompletions.add(f.jobId);
+                fetchAndUpdateReport(f.jobId, currentPreset).then((jobResult) => {
+                  if (jobResult) {
+                    batchFiles = batchFiles.map((bf) => {
+                      if (bf.jobId === f.jobId) {
+                        return { ...bf, report: buildBatchReportFromResult(jobResult, currentPreset) };
+                      }
+                      return bf;
+                    });
+                  }
+                });
+              }
+              return { ...f, progress: 100, fileState: 'complete', downloadUrl: result.downloadUrl };
+            } else if (result.error) {
+              return { ...f, fileState: 'error', error: result.error };
+            }
+          }
+          return f;
+        });
+      }
+    });
+  });
+
+  onDestroy(() => {
+    unsubscribeProgress?.();
+    unsubscribeResults?.();
+    disconnectWebSocket();
+  });
+
+  // Single-file processing - no mock needed, progress comes from WebSocket
   $effect(() => {
     if (mode !== 'processing') return;
-    progress = 0;
     reportReady = false;
     showReport = false;
-
-    let cancelled = false;
-    let activeTimeout: ReturnType<typeof setTimeout> | null = null;
-    let p = 0;
-
-    const tick = () => {
-      if (cancelled) return;
-      const sp = p < 20 ? 2.2 : p < 50 ? 1.0 : p < 85 ? 1.6 : 2.5;
-      p = Math.min(100, p + sp * (0.6 + Math.random() * 0.8));
-      progress = Math.round(p);
-      if (p >= 100) {
-        activeTimeout = setTimeout(() => {
-          if (cancelled) return;
-          mode = 'complete';
-          activeTimeout = setTimeout(() => {
-            if (!cancelled) reportReady = true;
-          }, 600);
-        }, 400);
-      } else {
-        activeTimeout = setTimeout(tick, 60 + Math.random() * 80);
-      }
-    };
-    activeTimeout = setTimeout(tick, 300);
-
-    return () => {
-      cancelled = true;
-      if (activeTimeout) clearTimeout(activeTimeout);
-    };
   });
 
   // Split animation effect
@@ -99,32 +313,8 @@
     };
   });
 
-  // Batch processing simulation effect
-  $effect(() => {
-    if (mode !== 'batch') return;
-
-    // Use untrack to read batchFiles without creating a dependency
-    const files = untrack(() => batchFiles);
-    batchSpeeds = files.map(() => 0.5 + Math.random() * 1.4);
-    batchStarts = files.map((_, i) => Date.now() + i * 250 + Math.random() * 400);
-
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const currentFiles = untrack(() => batchFiles);
-      if (currentFiles.every((f) => f.progress >= 100)) {
-        clearInterval(interval);
-        return;
-      }
-      batchFiles = currentFiles.map((f, i) => {
-        if (f.progress >= 100) return f;
-        if (now < batchStarts[i]) return f;
-        const np = Math.min(100, f.progress + batchSpeeds[i] * (0.5 + Math.random() * 0.9));
-        return { ...f, progress: Math.round(np), fileState: np >= 100 ? 'complete' : 'processing' };
-      });
-    }, 80);
-
-    return () => clearInterval(interval);
-  });
+  // Batch processing - progress comes from WebSocket, no mock simulation needed
+  // The progress is updated via the jobProgress subscription in onMount
 
   // Batch completion → merge effect
   $effect(() => {
@@ -132,7 +322,7 @@
       mode === 'batch' &&
       !mergeTriggered &&
       batchFiles.length > 0 &&
-      batchFiles.every((f) => f.progress >= 100)
+      batchFiles.every((f) => f.progress >= 100 || f.fileState === 'error')
     ) {
       mergeTriggered = true;
       const t = setTimeout(() => (mode = 'merging'), 800);
@@ -157,19 +347,54 @@
   });
 
   // Handlers
-  function startBatch(names: string[]) {
-    const files: BatchFile[] = names.map((name, i) => ({
+  async function uploadSingleFile(file: File) {
+    try {
+      errorMsg = '';
+      const response = await uploadFile(file, 'streaming'); // Default preset
+      currentJobId = response.jobId;
+      subscribeToJob(response.jobId);
+    } catch (err) {
+      const apiError = err as ApiError;
+      errorMsg = apiError.message || 'Upload failed';
+      mode = 'idle';
+    }
+  }
+
+  async function startBatch(files: File[]) {
+    const batchData: BatchFile[] = files.map((file, i) => ({
       id: `f-${i}-${Date.now()}`,
-      name,
+      name: file.name,
       progress: 0,
       fileState: 'pending',
-      report: BATCH_MOCK_POOL[i % BATCH_MOCK_POOL.length],
+      report: BATCH_MOCK_POOL[i % BATCH_MOCK_POOL.length], // Will be replaced with real data
     }));
-    batchFiles = files;
+    batchFiles = batchData;
     mergeTriggered = false;
     reportReady = false;
     showReport = false;
     mode = 'splitting';
+
+    // Upload all files
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const response = await uploadFile(files[i], 'streaming'); // Default preset
+        batchFiles = batchFiles.map((f, idx) => {
+          if (idx === i) {
+            return { ...f, jobId: response.jobId };
+          }
+          return f;
+        });
+        subscribeToJob(response.jobId);
+      } catch (err) {
+        const apiError = err as ApiError;
+        batchFiles = batchFiles.map((f, idx) => {
+          if (idx === i) {
+            return { ...f, fileState: 'error', error: apiError.message || 'Upload failed' };
+          }
+          return f;
+        });
+      }
+    }
   }
 
   function showReject(count: number) {
@@ -192,9 +417,11 @@
     }
     if (files.length === 1) {
       fileName = files[0].name;
+      progress = 0;
       mode = 'processing';
+      uploadSingleFile(files[0]);
     } else {
-      startBatch(files.map((f) => f.name));
+      startBatch(files);
     }
   }
 
@@ -240,14 +467,25 @@
     }
     if (files.length === 1) {
       fileName = files[0].name;
+      progress = 0;
       mode = 'processing';
+      uploadSingleFile(files[0]);
     } else {
-      startBatch(files.map((f) => f.name));
+      startBatch(files);
     }
     target.value = '';
   }
 
   function reset() {
+    // Clear job subscriptions
+    if (currentJobId) {
+      clearJobData(currentJobId);
+      currentJobId = null;
+    }
+    batchFiles.forEach((f) => {
+      if (f.jobId) clearJobData(f.jobId);
+    });
+
     mode = 'idle';
     progress = 0;
     showReport = false;
@@ -260,6 +498,9 @@
     reprocessing = false;
     singleReport = { ...SINGLE_REPORT };
     rejectMsg = '';
+    errorMsg = '';
+    currentDownloadUrl = null;
+    processedCompletions = new Set();
     if (rejectTimer) clearTimeout(rejectTimer);
     if (overrideTimer) clearTimeout(overrideTimer);
     mergeTriggered = false;
@@ -318,6 +559,32 @@
       if (e.key === 'ArrowRight') {
         navigateBatchReport(Math.min(batchFiles.length - 1, reportIndex + 1));
       }
+    }
+  }
+
+  function handleDownload() {
+    if (currentJobId && currentDownloadUrl) {
+      window.open(currentDownloadUrl, '_blank');
+    } else if (currentJobId) {
+      window.open(getDownloadUrl(currentJobId), '_blank');
+    }
+  }
+
+  function handleBatchDownload(index?: number) {
+    if (index !== undefined) {
+      const file = batchFiles[index];
+      if (file?.jobId) {
+        const url = file.downloadUrl || getDownloadUrl(file.jobId);
+        window.open(url, '_blank');
+      }
+    } else {
+      // Download all
+      batchFiles.forEach((file) => {
+        if (file.jobId && file.fileState === 'complete') {
+          const url = file.downloadUrl || getDownloadUrl(file.jobId);
+          window.open(url, '_blank');
+        }
+      });
     }
   }
 
@@ -382,6 +649,10 @@
 
   {#if rejectMsg}
     <div class="reject-msg">{rejectMsg}</div>
+  {/if}
+
+  {#if errorMsg}
+    <div class="error-msg">{errorMsg}</div>
   {/if}
 
   <!-- Sphere area -->
@@ -477,7 +748,7 @@
     {#if mode === 'complete'}
       <div class="complete-area">
         <div class="file-name">{fileName}</div>
-        <button class="download-btn">
+        <button class="download-btn" onclick={handleDownload}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="7 10 12 15 17 10" />
@@ -516,8 +787,8 @@
 
     {#if mode === 'batch-complete'}
       <div class="complete-area">
-        <div class="file-name">{batchFiles.length} files processed</div>
-        <button class="download-btn">
+        <div class="file-name">{batchFiles.filter(f => f.fileState === 'complete').length} of {batchFiles.length} files processed</div>
+        <button class="download-btn" onclick={() => handleBatchDownload()}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="7 10 12 15 17 10" />
@@ -656,6 +927,26 @@
     animation: fadeUp 0.3s ease-out;
     white-space: nowrap;
     letter-spacing: 0.3px;
+  }
+
+  .error-msg {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 400;
+    font-size: 12px;
+    color: rgba(255, 100, 100, 0.85);
+    background: rgba(255, 100, 100, 0.08);
+    border: 1px solid rgba(255, 100, 100, 0.15);
+    border-radius: 20px;
+    padding: 8px 20px;
+    z-index: 40;
+    animation: fadeUp 0.3s ease-out;
+    letter-spacing: 0.3px;
+    max-width: 80%;
+    text-align: center;
   }
 
   .sphere-container {

@@ -36,8 +36,11 @@ export interface BatchFile {
   id: string;
   name: string;
   progress: number;
-  fileState: 'pending' | 'processing' | 'complete';
+  fileState: 'pending' | 'processing' | 'complete' | 'error';
   report: BatchReportData;
+  jobId?: string;
+  error?: string;
+  downloadUrl?: string;
 }
 
 export interface OverrideType {

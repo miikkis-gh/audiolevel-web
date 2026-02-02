@@ -16,15 +16,32 @@ export interface UploadResponse {
   originalName: string;
 }
 
+export interface LoudnessAnalysis {
+  inputLufs: number;
+  inputTruePeak: number;
+  inputLoudnessRange?: number;
+}
+
+export interface JobResult {
+  success: boolean;
+  outputPath?: string;
+  error?: string;
+  duration?: number;
+  processingType?: 'ffmpeg-normalize' | 'direct-copy' | 'mastering-pipeline';
+  masteringDecisions?: {
+    compressionEnabled: boolean;
+    saturationEnabled: boolean;
+  };
+  filterChain?: string;
+  inputAnalysis?: LoudnessAnalysis;
+  outputAnalysis?: LoudnessAnalysis;
+}
+
 export interface JobStatus {
   jobId: string;
   status: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed';
   progress: number;
-  result?: {
-    success: boolean;
-    outputPath?: string;
-    error?: string;
-  };
+  result?: JobResult;
   error?: string;
 }
 
@@ -106,11 +123,10 @@ export async function fetchQueueStatus(): Promise<QueueStatus> {
   return response.json();
 }
 
-export async function uploadFile(file: File, preset: string, outputFormat: string = 'wav'): Promise<UploadResponse> {
+export async function uploadFile(file: File, preset: string): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('preset', preset);
-  formData.append('outputFormat', outputFormat);
 
   const response = await fetch(`${API_URL}/api/upload`, {
     method: 'POST',
