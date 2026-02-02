@@ -200,8 +200,8 @@
         }
       }
 
-      // Update batch file progress
-      if (mode === 'batch' || mode === 'splitting') {
+      // Update batch file progress (check batchFiles.length instead of mode to avoid race conditions)
+      if (batchFiles.length > 0 && mode !== 'idle' && mode !== 'processing' && mode !== 'complete') {
         batchFiles = batchFiles.map((f) => {
           if (!f.jobId) return f;
           const jobProg = $progress.get(f.jobId);
@@ -246,8 +246,8 @@
         }
       }
 
-      // Handle batch file completion
-      if (mode === 'batch' || mode === 'splitting') {
+      // Handle batch file completion (check batchFiles.length instead of mode to avoid race conditions)
+      if (batchFiles.length > 0 && mode !== 'idle' && mode !== 'processing' && mode !== 'complete') {
         batchFiles = batchFiles.map((f) => {
           if (!f.jobId) return f;
           const result = $results.get(f.jobId);
@@ -325,7 +325,7 @@
       mode === 'batch' &&
       !mergeTriggered &&
       batchFiles.length > 0 &&
-      batchFiles.every((f) => f.progress >= 100 || f.fileState === 'error')
+      batchFiles.every((f) => f.fileState === 'complete' || f.fileState === 'error')
     ) {
       mergeTriggered = true;
       // Don't return cleanup - we want the timeout to complete even if effect re-runs
