@@ -3,7 +3,6 @@ import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
 import { env } from './config/env';
 import { logger } from './utils/logger';
-import { errorHandler } from './middleware/errorHandler';
 import { getRedisClient, closeRedis } from './services/redis';
 import { closeQueue } from './services/queue';
 import { startAudioWorker, stopAudioWorker } from './workers/audioWorker';
@@ -22,15 +21,46 @@ import healthRoutes from './routes/health';
 import presetsRoutes from './routes/presets';
 import uploadRoutes from './routes/upload';
 
+import { AppError, ERROR_MESSAGES } from './middleware/errorHandler';
+
 const app = new Hono();
+
+// Global error handler (catches all errors)
+app.onError((err, c) => {
+  if (err instanceof AppError) {
+    logger.warn({ err, statusCode: err.statusCode, code: err.code }, 'Application error');
+    return c.json(
+      {
+        error: err.message,
+        code: err.code,
+        hint: err.hint,
+      },
+      err.statusCode as 400 | 401 | 403 | 404 | 429 | 500 | 503
+    );
+  }
+
+  logger.error({ err }, 'Unhandled error');
+  return c.json(
+    {
+      error: 'An unexpected error occurred',
+      code: 'INTERNAL_ERROR',
+      hint: 'Please try again. If the problem persists, contact support.',
+    },
+    500
+  );
+});
 
 // Middleware
 app.use('*', honoLogger());
-app.use('*', errorHandler);
 app.use(
   '*',
   cors({
-    origin: ['http://localhost:5173', 'http://localhost:3000'],
+    origin: (origin) => {
+      // Allow localhost for development
+      if (origin?.includes('localhost')) return origin;
+      // Allow any origin in production (requests go through reverse proxy)
+      return origin || '*';
+    },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     exposeHeaders: ['Content-Disposition'],
