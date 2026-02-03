@@ -37,13 +37,17 @@ async function processAudioJob(
         onStage: (stage) => {
           log.info({ stage }, 'Processing stage');
         },
-      }
+      },
+      job.data.originalName // Pass filename for profile detection
     );
 
     if (result.success) {
       log.info(
         {
           duration: result.duration,
+          processingType: result.processingType,
+          detectedProfile: result.detectedProfile?.type,
+          confidence: result.detectedProfile?.confidence,
           inputLufs: result.inputAnalysis?.inputLufs,
           outputLufs: result.outputAnalysis?.inputLufs,
         },
@@ -59,6 +63,7 @@ async function processAudioJob(
         filterChain: result.filterChain,
         inputAnalysis: result.inputAnalysis,
         outputAnalysis: result.outputAnalysis,
+        detectedProfile: result.detectedProfile,
       };
     } else {
       log.error({ error: result.error }, 'Audio processing failed');

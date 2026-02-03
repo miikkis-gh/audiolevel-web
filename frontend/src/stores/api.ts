@@ -12,12 +12,28 @@ export interface LoudnessAnalysis {
   inputLoudnessRange?: number;
 }
 
+export interface DetectionReason {
+  signal: string;
+  detail: string;
+  weight: number;
+}
+
+export interface DetectedProfile {
+  type: string;
+  label: string;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  targetLufs: number;
+  targetTruePeak: number;
+  standard: string;
+  reasons: DetectionReason[];
+}
+
 export interface JobResult {
   success: boolean;
   outputPath?: string;
   error?: string;
   duration?: number;
-  processingType?: 'ffmpeg-normalize' | 'direct-copy' | 'mastering-pipeline';
+  processingType?: 'mastering' | 'normalization' | 'peak-normalization';
   masteringDecisions?: {
     compressionEnabled: boolean;
     saturationEnabled: boolean;
@@ -25,6 +41,7 @@ export interface JobResult {
   filterChain?: string;
   inputAnalysis?: LoudnessAnalysis;
   outputAnalysis?: LoudnessAnalysis;
+  detectedProfile?: DetectedProfile;
 }
 
 export interface JobStatus {

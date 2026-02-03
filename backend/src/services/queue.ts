@@ -7,7 +7,6 @@ export interface AudioJobData {
   jobId: string;
   inputPath: string;
   outputPath: string;
-  preset: string;
   originalName: string;
   fileSize?: number;
 }
@@ -42,13 +41,23 @@ export function calculatePriority(fileSize?: number): JobPriority {
   return JobPriority.LOWEST;
 }
 
+export interface DetectedProfileInfo {
+  type: string;
+  label: string;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  targetLufs: number;
+  targetTruePeak: number;
+  standard: string;
+  reasons: Array<{ signal: string; detail: string; weight: number }>;
+}
+
 export interface AudioJobResult {
   success: boolean;
   outputPath?: string;
   error?: string;
   duration?: number;
-  // Mastering pipeline metadata
-  processingType?: 'ffmpeg-normalize' | 'mastering-pipeline' | 'direct-copy';
+  // Processing type based on detected profile
+  processingType?: 'mastering' | 'normalization' | 'peak-normalization';
   masteringDecisions?: {
     compressionEnabled: boolean;
     saturationEnabled: boolean;
@@ -64,6 +73,8 @@ export interface AudioJobResult {
     inputTruePeak: number;
     inputLoudnessRange: number;
   };
+  // Profile detection results
+  detectedProfile?: DetectedProfileInfo;
 }
 
 let audioQueue: Queue<AudioJobData, AudioJobResult> | null = null;

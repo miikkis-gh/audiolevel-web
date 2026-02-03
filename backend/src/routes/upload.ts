@@ -128,12 +128,11 @@ upload.post('/', async (c) => {
   logger.info({ jobId, filename: file.name, size: file.size, outputFormat }, 'File uploaded');
 
   // Add job to queue with file size for priority calculation
-  // Always use mastering pipeline for optimal audio quality
+  // Profile detection will automatically determine processing path (mastering vs normalization)
   await addAudioJob({
     jobId,
     inputPath,
     outputPath,
-    preset: 'mastering',
     originalName: file.name,
     fileSize: file.size,
   });
@@ -168,6 +167,7 @@ upload.get('/job/:id', async (c) => {
       filterChain: status.result.filterChain,
       inputAnalysis: status.result.inputAnalysis,
       outputAnalysis: status.result.outputAnalysis,
+      detectedProfile: status.result.detectedProfile,
     } : undefined,
     error: status.failedReason,
   });

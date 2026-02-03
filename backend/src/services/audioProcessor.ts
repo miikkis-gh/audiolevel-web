@@ -18,6 +18,16 @@ import {
   DEFAULT_RESOURCE_LIMITS,
 } from '../utils/resourceLimiter';
 import { runMasteringProcess } from './masteringProcessor';
+import {
+  detectAudioProfile,
+  type AudioProfile,
+  type ProfileDetectionResult,
+  type DetectionReason,
+} from './profileDetector';
+import {
+  runNormalizationProcess,
+  runPeakNormalization,
+} from './normalizationProcessor';
 
 export interface ProcessingOptions {
   inputPath: string;
@@ -29,7 +39,7 @@ export interface ProcessingResult {
   outputPath?: string;
   error?: string;
   duration?: number;
-  processingType?: 'mastering-pipeline';
+  processingType?: 'mastering' | 'normalization' | 'peak-normalization';
   inputAnalysis?: LoudnessAnalysis;
   outputAnalysis?: LoudnessAnalysis;
   metadata?: AudioMetadata;
@@ -37,6 +47,16 @@ export interface ProcessingResult {
   masteringDecisions?: {
     compressionEnabled: boolean;
     saturationEnabled: boolean;
+  };
+  // Profile detection results
+  detectedProfile?: {
+    type: string;
+    label: string;
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+    targetLufs: number;
+    targetTruePeak: number;
+    standard: string;
+    reasons: DetectionReason[];
   };
 }
 
@@ -205,12 +225,15 @@ export async function analyzeLoudness(inputPath: string): Promise<LoudnessAnalys
 }
 
 /**
- * Process audio file using mastering pipeline
- * Applies: highpass filter, adaptive compression, saturation, loudness normalization, limiting
+ * Process audio file based on detected content profile
+ * - Music (songs, mixes): Full mastering chain (highpass + compression + saturation + loudnorm + limiter)
+ * - Speech (podcast, audiobook, voiceover): Simple normalization (25Hz highpass + loudnorm to profile LUFS)
+ * - SFX (samples): Peak normalization
  */
 export async function processAudio(
   options: ProcessingOptions,
-  callbacks?: ProcessingCallbacks
+  callbacks?: ProcessingCallbacks,
+  filename?: string
 ): Promise<ProcessingResult> {
   const log = createChildLogger({
     inputPath: options.inputPath,
@@ -232,63 +255,196 @@ export async function processAudio(
 
     log.info({ metadata }, 'Audio metadata retrieved');
 
+    // Detect audio profile
+    callbacks?.onStage?.('Classifying content type...');
+    callbacks?.onProgress?.(5);
+
+    const detectionFilename = filename || options.inputPath.split('/').pop() || 'audio';
+    const profileResult = await detectAudioProfile(options.inputPath, detectionFilename);
+
+    if (!profileResult) {
+      log.warn('Profile detection failed, defaulting to mastering pipeline');
+    }
+
+    const profile = profileResult?.profile;
+    const useMasteringChain = profile?.useMasteringChain ?? true;
+
+    log.info({
+      detectedType: profile?.type ?? 'default',
+      label: profile?.label ?? 'Music / Song',
+      confidence: profileResult?.confidence ?? 'LOW',
+      useMasteringChain,
+    }, 'Profile detection complete');
+
     // Determine output format from the output path
     const outputFormat = options.outputPath.split('.').pop()?.toLowerCase() || 'wav';
 
-    // Run mastering pipeline (single-pass)
-    const masterResult = await runMasteringProcess(
-      options.inputPath,
-      options.outputPath,
-      {
-        onProgress: (percent) => {
-          // Map mastering progress to 10-95%
-          const mappedProgress = 10 + Math.floor((percent / 100) * 85);
-          callbacks?.onProgress?.(mappedProgress);
-        },
-        onStage: callbacks?.onStage,
-      },
-      outputFormat
-    );
+    // Build detected profile info for result
+    const detectedProfile = profileResult ? {
+      type: profileResult.profile.type,
+      label: profileResult.profile.label,
+      confidence: profileResult.confidence,
+      targetLufs: profileResult.profile.targetLufs,
+      targetTruePeak: profileResult.profile.targetTruePeak,
+      standard: profileResult.profile.standard,
+      reasons: profileResult.reasons,
+    } : undefined;
 
-    if (!masterResult.success) {
+    // Route to appropriate processing path
+    if (profile?.type === 'SFX_SAMPLE') {
+      // SFX/Samples: Use peak normalization (LUFS doesn't apply to very short files)
+      callbacks?.onStage?.('Peak normalizing audio...');
+
+      const peakResult = await runPeakNormalization(
+        options.inputPath,
+        options.outputPath,
+        profile.targetTruePeak,
+        {
+          onProgress: (percent) => {
+            const mappedProgress = 10 + Math.floor((percent / 100) * 85);
+            callbacks?.onProgress?.(mappedProgress);
+          },
+          onStage: callbacks?.onStage,
+        },
+        outputFormat
+      );
+
+      if (!peakResult.success) {
+        return {
+          success: false,
+          error: peakResult.error || 'Peak normalization failed',
+          duration: Date.now() - startTime,
+          detectedProfile,
+        };
+      }
+
+      callbacks?.onProgress?.(100);
+      const duration = Date.now() - startTime;
+
+      log.info({ duration, processingType: 'peak-normalization' }, 'Peak normalization complete');
+
       return {
-        success: false,
-        error: masterResult.error || 'Processing failed',
-        duration: Date.now() - startTime,
+        success: true,
+        outputPath: options.outputPath,
+        duration,
+        processingType: 'peak-normalization',
+        filterChain: peakResult.filterChain,
+        metadata,
+        detectedProfile,
+      };
+    } else if (!useMasteringChain && profile) {
+      // Speech content (podcast, audiobook, voiceover): Simple normalization
+      callbacks?.onStage?.('Normalizing audio...');
+
+      const normResult = await runNormalizationProcess(
+        options.inputPath,
+        options.outputPath,
+        profile,
+        {
+          onProgress: (percent) => {
+            const mappedProgress = 10 + Math.floor((percent / 100) * 85);
+            callbacks?.onProgress?.(mappedProgress);
+          },
+          onStage: callbacks?.onStage,
+        },
+        outputFormat
+      );
+
+      if (!normResult.success) {
+        return {
+          success: false,
+          error: normResult.error || 'Normalization failed',
+          duration: Date.now() - startTime,
+          detectedProfile,
+        };
+      }
+
+      callbacks?.onProgress?.(100);
+      const duration = Date.now() - startTime;
+
+      log.info({
+        duration,
+        processingType: 'normalization',
+        targetLufs: profile.targetLufs,
+        filterChain: normResult.filterChain,
+      }, 'Normalization complete');
+
+      return {
+        success: true,
+        outputPath: options.outputPath,
+        duration,
+        processingType: 'normalization',
+        filterChain: normResult.filterChain,
+        inputAnalysis: normResult.inputAnalysis ? {
+          inputLufs: normResult.inputAnalysis.integratedLufs,
+          inputTruePeak: normResult.inputAnalysis.truePeak,
+          inputLoudnessRange: normResult.inputAnalysis.loudnessRange,
+        } : undefined,
+        outputAnalysis: normResult.outputAnalysis ? {
+          inputLufs: normResult.outputAnalysis.integratedLufs,
+          inputTruePeak: normResult.outputAnalysis.truePeak,
+          inputLoudnessRange: normResult.outputAnalysis.loudnessRange,
+        } : undefined,
+        metadata,
+        detectedProfile,
+      };
+    } else {
+      // Music content (songs, mixes): Full mastering chain
+      const masterResult = await runMasteringProcess(
+        options.inputPath,
+        options.outputPath,
+        {
+          onProgress: (percent) => {
+            const mappedProgress = 10 + Math.floor((percent / 100) * 85);
+            callbacks?.onProgress?.(mappedProgress);
+          },
+          onStage: callbacks?.onStage,
+        },
+        outputFormat
+      );
+
+      if (!masterResult.success) {
+        return {
+          success: false,
+          error: masterResult.error || 'Processing failed',
+          duration: Date.now() - startTime,
+          detectedProfile,
+        };
+      }
+
+      callbacks?.onProgress?.(100);
+      const duration = Date.now() - startTime;
+
+      log.info({
+        duration,
+        outputFormat,
+        filterChain: masterResult.filterChain,
+        decisions: masterResult.decisions,
+        inputLufs: masterResult.inputAnalysis?.integratedLufs,
+        outputLufs: masterResult.outputAnalysis?.integratedLufs,
+      }, 'Audio mastering complete');
+
+      return {
+        success: true,
+        outputPath: options.outputPath,
+        duration,
+        processingType: 'mastering',
+        masteringDecisions: masterResult.decisions,
+        filterChain: masterResult.filterChain,
+        inputAnalysis: masterResult.inputAnalysis ? {
+          inputLufs: masterResult.inputAnalysis.integratedLufs,
+          inputTruePeak: masterResult.inputAnalysis.truePeak,
+          inputLoudnessRange: masterResult.inputAnalysis.lra,
+        } : undefined,
+        outputAnalysis: masterResult.outputAnalysis ? {
+          inputLufs: masterResult.outputAnalysis.integratedLufs,
+          inputTruePeak: masterResult.outputAnalysis.truePeak,
+          inputLoudnessRange: masterResult.outputAnalysis.lra,
+        } : undefined,
+        metadata,
+        detectedProfile,
       };
     }
-
-    callbacks?.onProgress?.(100);
-    const duration = Date.now() - startTime;
-
-    log.info({
-      duration,
-      outputFormat,
-      filterChain: masterResult.filterChain,
-      decisions: masterResult.decisions,
-      inputLufs: masterResult.inputAnalysis?.integratedLufs,
-      outputLufs: masterResult.outputAnalysis?.integratedLufs,
-    }, 'Audio processing complete');
-
-    return {
-      success: true,
-      outputPath: options.outputPath,
-      duration,
-      processingType: 'mastering-pipeline',
-      masteringDecisions: masterResult.decisions,
-      filterChain: masterResult.filterChain,
-      inputAnalysis: masterResult.inputAnalysis ? {
-        inputLufs: masterResult.inputAnalysis.integratedLufs,
-        inputTruePeak: masterResult.inputAnalysis.truePeak,
-        inputLoudnessRange: masterResult.inputAnalysis.lra,
-      } : undefined,
-      outputAnalysis: masterResult.outputAnalysis ? {
-        inputLufs: masterResult.outputAnalysis.integratedLufs,
-        inputTruePeak: masterResult.outputAnalysis.truePeak,
-        inputLoudnessRange: masterResult.outputAnalysis.lra,
-      } : undefined,
-      metadata,
-    };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     log.error({ err }, 'Audio processing failed');

@@ -61,17 +61,22 @@
   let unsubscribeResults: (() => void) | null = null;
   let rateLimitInterval: ReturnType<typeof setInterval> | null = null;
 
-  // Processing display info
-  const PROCESSING_INFO = {
+  // Fallback processing display info (when no profile detection available)
+  const PROCESSING_FALLBACK = {
     mastering: {
-      displayName: 'Mastered Audio',
-      standard: 'Professional Mastering',
-      target: '-9 LUFS / -0.5 dBTP',
+      displayName: 'Music / Song',
+      standard: 'Streaming (Spotify / Apple Music / YouTube)',
+      target: '-14 LUFS / -1 dBTP',
     },
-    normalize: {
+    normalization: {
       displayName: 'Normalized Audio',
       standard: 'Broadcast Standard',
-      target: '-14 LUFS / -1 dBTP',
+      target: '-16 LUFS / -1 dBTP',
+    },
+    'peak-normalization': {
+      displayName: 'SFX / Sample',
+      standard: 'SFX / Sample library',
+      target: 'Peak normalize to -1 dBFS',
     },
   };
 
@@ -93,12 +98,22 @@
 
   // Build report from job result
   function buildReportFromResult(result: JobResult): SingleReportData {
-    const isMastering = result.processingType === 'mastering-pipeline';
-    const info = isMastering ? PROCESSING_INFO.mastering : PROCESSING_INFO.normalize;
+    const profile = result.detectedProfile;
+    const processingType = result.processingType || 'mastering';
+    const fallback = PROCESSING_FALLBACK[processingType] || PROCESSING_FALLBACK.mastering;
+
+    // Use detected profile data if available, otherwise use fallback
+    const displayName = profile?.label || fallback.displayName;
+    const standard = profile?.standard || fallback.standard;
+    const target = profile
+      ? `${profile.targetLufs} LUFS / ${profile.targetTruePeak} dBTP`
+      : fallback.target;
+    const confidence = profile?.confidence || 'HIGH';
+
     const notes: string[] = [];
 
     // Build notes based on processing
-    if (isMastering) {
+    if (processingType === 'mastering') {
       if (result.masteringDecisions?.compressionEnabled) {
         notes.push('Compression applied — dynamic range was high');
       }
@@ -122,13 +137,19 @@
       notes.push('Processing completed successfully');
     }
 
+    // Build reasons from profile detection or use processing info
+    const reasons = profile?.reasons.map(r => ({
+      signal: r.signal,
+      detail: r.detail,
+    })) || [
+      { signal: `Processing: ${processingType}`, detail: 'processing method used' },
+      { signal: `Duration: ${result.duration ? `${(result.duration / 1000).toFixed(1)}s` : 'N/A'}`, detail: 'processing time' },
+    ];
+
     return {
-      detectedAs: info.displayName,
-      confidence: 'HIGH',
-      reasons: [
-        { signal: `Processing: ${isMastering ? 'Mastering pipeline' : 'Normalization'}`, detail: 'processing method used' },
-        { signal: `Duration: ${result.duration ? `${(result.duration / 1000).toFixed(1)}s` : 'N/A'}`, detail: 'processing time' },
-      ],
+      detectedAs: displayName,
+      confidence,
+      reasons,
       before: {
         integrated: formatLufs(result.inputAnalysis?.inputLufs),
         truePeak: formatTruePeak(result.inputAnalysis?.inputTruePeak),
@@ -139,8 +160,8 @@
         truePeak: formatTruePeak(result.outputAnalysis?.inputTruePeak),
         lra: formatLra(result.outputAnalysis?.inputLoudnessRange),
       },
-      target: info.target,
-      standard: info.standard,
+      target,
+      standard,
       notes,
     };
   }
