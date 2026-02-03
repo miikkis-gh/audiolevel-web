@@ -14,16 +14,20 @@
   // Constants
   const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
   const ALLOWED_TYPES = [
-    'audio/wav',
-    'audio/wave',
-    'audio/x-wav',
-    'audio/mp3',
-    'audio/mpeg',
-    'audio/flac',
-    'audio/x-flac',
-    'audio/aac',
-    'audio/ogg',
-    'audio/vorbis',
+    'audio/wav', 'audio/wave', 'audio/x-wav',
+    'audio/mp3', 'audio/mpeg',
+    'audio/flac', 'audio/x-flac',
+    'audio/aac', 'audio/aacp', 'audio/mp4', 'audio/x-m4a', 'audio/m4a',
+    'audio/ogg', 'audio/vorbis', 'audio/opus',
+    'audio/aiff', 'audio/x-aiff',
+    'audio/webm', 'audio/x-matroska',
+    'audio/x-ms-wma',
+    'audio/x-caf', 'audio/basic',
+    'audio/amr', 'audio/x-wavpack',
+    'audio/x-ape', 'audio/ape',
+    'audio/ac3', 'audio/vnd.dolby.dd-raw',
+    'audio/vnd.dts', 'audio/vnd.dts.hd',
+    'audio/mp2', 'audio/x-mp4',
   ];
   const OUTPUT_FORMATS = [
     { id: 'wav', name: 'WAV', description: 'Lossless, large file size', icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
@@ -59,11 +63,16 @@
 
     // Also check extension as fallback
     const ext = file.name.split('.').pop()?.toLowerCase();
-    const validExtensions = ['wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a'];
+    const validExtensions = [
+      'wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a',
+      'aiff', 'aif', 'opus', 'wma', 'webm', 'mka',
+      'caf', 'au', 'snd', 'amr', 'wv', 'ape',
+      'ac3', 'dts', 'mp2',
+    ];
     const hasValidExtension = ext ? validExtensions.includes(ext) : false;
 
     if (!isValidType && !hasValidExtension) {
-      return `Unsupported file type. Please upload WAV, MP3, FLAC, AAC, or OGG files.`;
+      return `Unsupported file type. Please upload a supported audio file.`;
     }
 
     return null;
@@ -162,7 +171,7 @@
       <input
         bind:this={fileInput}
         type="file"
-        accept="audio/*,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/flac,audio/x-flac,audio/aac,audio/mp4,audio/x-m4a,audio/ogg,.mp3,.wav,.flac,.aac,.ogg,.m4a,.aiff,.aif"
+        accept="audio/*,.wav,.mp3,.flac,.aac,.ogg,.m4a,.aiff,.aif,.opus,.wma,.webm,.mka,.caf,.au,.snd,.amr,.wv,.ape,.ac3,.dts,.mp2"
         class="hidden"
         onchange={handleFileInput}
         {disabled}

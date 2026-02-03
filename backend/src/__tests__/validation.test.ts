@@ -50,10 +50,19 @@ describe('MIME Type Validation', () => {
       'audio/mp3',
       'audio/flac',
       'audio/aac',
+      'audio/mp4',
+      'audio/x-m4a',
       'audio/ogg',
       'audio/x-wav',
       'audio/x-flac',
       'audio/vorbis',
+      'audio/opus',
+      'audio/aiff',
+      'audio/x-aiff',
+      'audio/webm',
+      'audio/x-ms-wma',
+      'audio/amr',
+      'audio/ac3',
     ] as const;
 
     for (const type of allowedTypes) {

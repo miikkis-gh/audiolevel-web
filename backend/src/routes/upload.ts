@@ -14,7 +14,12 @@ import { logger, createChildLogger } from '../utils/logger';
 
 const upload = new Hono();
 
-const ALLOWED_EXTENSIONS = new Set(['.wav', '.mp3', '.flac', '.aac', '.ogg', '.m4a']);
+const ALLOWED_EXTENSIONS = new Set([
+  '.wav', '.mp3', '.flac', '.aac', '.ogg', '.m4a',
+  '.aiff', '.aif', '.opus', '.wma', '.webm', '.mka',
+  '.caf', '.au', '.snd', '.amr', '.wv', '.ape',
+  '.ac3', '.dts', '.mp2',
+]);
 
 // Rate limit status endpoint (no rate limiting applied)
 upload.get('/rate-limit', async (c) => {
