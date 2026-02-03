@@ -31,7 +31,7 @@ test.describe('Batch Upload', () => {
     await page.waitForTimeout(1000);
 
     // Check for batch limit message or that only 10 files are shown
-    const hasLimitMessage = await page.locator('text=/limit|maximum|10/i').isVisible();
+    const hasLimitMessage = await page.locator('text=/drop up to \\d+ files at a time/i').isVisible();
     const fileCount = await page.locator('[data-testid="batch-file"]').count();
 
     // Either shows limit message or caps at 10 files
