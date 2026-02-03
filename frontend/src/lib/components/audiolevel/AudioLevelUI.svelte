@@ -17,7 +17,7 @@
     type OverrideType,
   } from './constants';
   import { getStageLabel, getLayout, getPositions, truncName } from './helpers';
-  import { uploadFile, getDownloadUrl, getJobStatus, type ApiError, type JobResult } from '../../../stores/api';
+  import { uploadFile, getDownloadUrl, getJobStatus, fetchRateLimitStatus, type ApiError, type JobResult, type RateLimitStatus } from '../../../stores/api';
   import {
     connectWebSocket,
     disconnectWebSocket,
@@ -45,6 +45,7 @@
   let errorMsg = $state('');
   let downloadDropdownOpen = $state(false);
   let zipping = $state(false);
+  let rateLimitStatus = $state<RateLimitStatus | null>(null);
 
   // Job tracking
   let currentJobId = $state<string | null>(null);
@@ -59,6 +60,7 @@
   let dragCount = 0;
   let unsubscribeProgress: (() => void) | null = null;
   let unsubscribeResults: (() => void) | null = null;
+  let rateLimitInterval: ReturnType<typeof setInterval> | null = null;
 
   // Map preset to display name
   const PRESET_DISPLAY_NAMES: Record<string, string> = {
@@ -193,6 +195,17 @@
   onMount(() => {
     connectWebSocket();
 
+    // Fetch rate limit status
+    async function updateRateLimit() {
+      try {
+        rateLimitStatus = await fetchRateLimitStatus();
+      } catch {
+        // Ignore errors
+      }
+    }
+    updateRateLimit();
+    rateLimitInterval = setInterval(updateRateLimit, 30000); // Update every 30s
+
     // Subscribe to progress updates
     unsubscribeProgress = jobProgress.subscribe(($progress: Map<string, { percent: number; stage?: string }>) => {
       // Update single file progress
@@ -285,6 +298,7 @@
     unsubscribeProgress?.();
     unsubscribeResults?.();
     disconnectWebSocket();
+    if (rateLimitInterval) clearInterval(rateLimitInterval);
   });
 
   // Close dropdown when clicking outside
@@ -974,6 +988,25 @@
       {/if}
     </div>
   {/if}
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    {#if rateLimitStatus}
+      <div class="status-item">
+        <span class="status-label">Uploads</span>
+        <span class="status-value" class:warning={rateLimitStatus.remaining <= 3} class:critical={rateLimitStatus.remaining === 0}>
+          {rateLimitStatus.remaining}/{rateLimitStatus.limit}
+        </span>
+      </div>
+      <div class="status-divider"></div>
+      <div class="status-item">
+        <span class="status-label">Resets</span>
+        <span class="status-value">
+          {Math.ceil((rateLimitStatus.resetAt - Date.now()) / 60000)}m
+        </span>
+      </div>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -1435,5 +1468,55 @@
         0 0 18px rgba(80, 210, 180, 0.22),
         0 0 40px rgba(80, 210, 180, 0.1);
     }
+  }
+
+  /* Status bar */
+  .status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: rgba(10, 10, 18, 0.85);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    z-index: 50;
+  }
+
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status-label {
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .status-value {
+    color: rgba(80, 210, 180, 0.7);
+    font-weight: 500;
+  }
+
+  .status-value.warning {
+    color: rgba(255, 180, 80, 0.8);
+  }
+
+  .status-value.critical {
+    color: rgba(255, 100, 100, 0.8);
+  }
+
+  .status-divider {
+    width: 1px;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
   }
 </style>
