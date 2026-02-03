@@ -44,19 +44,13 @@ Input Audio
     │                                                         │
     ▼                                                         │
 ┌─────────────────────────────────────────┐                   │
-│  4. HIGH SHELF (always)                 │                   │
-│  +1.5 dB at 8 kHz - restores air        │                   │
+│  4. SATURATION (conditional)            │                   │
+│  Enabled if: LUFS < -12 AND TP < -1.5   │                   │
 └─────────────────────────────────────────┘                   │
     │                                                         │
     ▼                                                         │
 ┌─────────────────────────────────────────┐                   │
-│  5. SATURATION (conditional)            │                   │
-│  Enabled if: LUFS < -16 AND TP < -1.5   │                   │
-└─────────────────────────────────────────┘                   │
-    │                                                         │
-    ▼                                                         │
-┌─────────────────────────────────────────┐                   │
-│  6a. LOUDNORM - PASS 1 (measurement)    │                   │
+│  5a. LOUDNORM - PASS 1 (measurement)    │                   │
 │  print_format=json → measured values    │───────────────────┤
 └─────────────────────────────────────────┘                   │
     │                                                         │
@@ -65,14 +59,14 @@ Input Audio
     │                                                         │
     ▼                                                         │
 ┌─────────────────────────────────────────┐                   │
-│  6b. LOUDNORM - PASS 2 (linear mode)    │◄──────────────────┘
+│  5b. LOUDNORM - PASS 2 (linear mode)    │◄──────────────────┘
 │  linear=true + measured values          │   (re-read input)
 │  Constant gain, no pumping              │
 └─────────────────────────────────────────┘
     │
     ▼
 ┌─────────────────────────────────────────┐
-│  7. LIMITER                             │
+│  6. LIMITER                             │
 │  True-peak limiting at -0.63 dBTP       │
 └─────────────────────────────────────────┘
     │
@@ -118,7 +112,7 @@ This is a gentle 12 dB/octave rolloff that doesn't affect audible bass.
 
 ### 3. Compressor (Conditional)
 
-**FFmpeg filter:** `acompressor=threshold=-18dB:ratio=2.5:attack=50:release=200`
+**FFmpeg filter:** `acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200`
 
 **Enabled when:**
 - Crest factor > 10 dB (high peak-to-average ratio)
@@ -130,47 +124,31 @@ This is a gentle 12 dB/octave rolloff that doesn't affect audible bass.
 |-----------|-------|---------|
 | Threshold | -18 dB | Engage on moderate-loud signals |
 | Ratio | 2.5:1 | Gentle compression |
-| Attack | 50 ms | Preserve transient punch (kick, snare snap) |
+| Attack | 30 ms | Allow transients through |
 | Release | 200 ms | Smooth gain recovery |
 
-**Rationale:** Only compress audio that has excessive dynamics. The 50ms attack allows more of the initial transient to pass through before gain reduction engages, preserving perceived impact. Well-mastered content or already-compressed audio passes through unchanged.
+**Rationale:** Only compress audio that has excessive dynamics. Well-mastered content or already-compressed audio passes through unchanged.
 
 ---
 
-### 4. High Shelf (Always)
+### 4. Saturation (Conditional)
 
-**FFmpeg filter:** `treble=g=1.5:f=8000:t=s`
-
-**Parameters:**
-
-| Parameter | Value | Purpose |
-|-----------|-------|---------|
-| g | 1.5 dB | Subtle boost |
-| f | 8000 Hz | Shelf starts at 8 kHz |
-| t | s | Shelf type (not peaking) |
-
-**Rationale:** Restores air and presence to all material. Applied after compression (if enabled) to compensate for any high-frequency loss from gain reduction, and before saturation to ensure the top end is present before harmonic enhancement.
-
----
-
-### 5. Saturation (Conditional)
-
-**FFmpeg filter:** `asoftclip=type=quintic`
+**FFmpeg filter:** `asoftclip=type=tanh`
 
 **Enabled when:**
-- Integrated LUFS < -16 (genuinely quiet source material)
+- Integrated LUFS < -12 (quiet source material)
 - AND True Peak < -1.5 dBTP (headroom available)
 
-**Effect:** Applies quintic soft clipping, which:
-- Has a gentler knee than tanh, producing fewer odd harmonics
-- Adds harmonic warmth/density with more transparent sound
-- Gently limits peaks without sounding "crunchy" on transients
+**Effect:** Applies hyperbolic tangent soft clipping, which:
+- Adds harmonic warmth/density
+- Gently limits peaks
+- Increases perceived loudness without hard clipping
 
-**Rationale:** The conservative -16 LUFS threshold ensures only genuinely quiet material (demos, rough mixes, older recordings) gets harmonic enhancement. Well-produced modern music typically lands between -14 and -8 LUFS, avoiding unnecessary coloration.
+**Rationale:** Quiet source material benefits from harmonic enhancement before loudness normalization. Material that's already loud or peaks near 0 dBTP is left clean.
 
 ---
 
-### 6. Loudness Normalization (Two-Pass)
+### 5. Loudness Normalization (Two-Pass)
 
 The loudnorm filter runs in **two passes** to eliminate pumping artifacts:
 
@@ -221,7 +199,7 @@ loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.52:measured_TP=-0.30:measured_LRA=5.8
 
 ---
 
-### 7. True-Peak Limiter
+### 6. True-Peak Limiter
 
 **FFmpeg filter:** `alimiter=limit=0.93:attack=0.5:release=20:level=false`
 
@@ -276,17 +254,17 @@ Warnings are logged if targets are not met, but processing continues.
 
 **Minimal (clean, well-mastered input):**
 ```
-highpass=f=25,treble=g=1.5:f=8000:t=s,loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json
+highpass=f=25,loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json
 ```
 
 **With compression (dynamic input):**
 ```
-highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=50:release=200,treble=g=1.5:f=8000:t=s,loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json
+highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json
 ```
 
 **Full chain (quiet, dynamic input):**
 ```
-highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=50:release=200,treble=g=1.5:f=8000:t=s,asoftclip=type=quintic,loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json
+highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,asoftclip=type=tanh,loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json
 ```
 
 ### Pass 2 (Linear Processing)
@@ -295,17 +273,17 @@ After extracting measured values from pass 1, the same pre-loudnorm chain is use
 
 **Minimal:**
 ```
-highpass=f=25,treble=g=1.5:f=8000:t=s,loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.5:measured_TP=-0.3:measured_LRA=5.8:measured_thresh=-28.7:offset=0.2:linear=true:print_format=summary,alimiter=limit=0.93:attack=0.5:release=20:level=false
+highpass=f=25,loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.5:measured_TP=-0.3:measured_LRA=5.8:measured_thresh=-28.7:offset=0.2:linear=true:print_format=summary,alimiter=limit=0.93:attack=0.5:release=20:level=false
 ```
 
 **With compression:**
 ```
-highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=50:release=200,treble=g=1.5:f=8000:t=s,loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.5:measured_TP=-0.3:measured_LRA=5.8:measured_thresh=-28.7:offset=0.2:linear=true:print_format=summary,alimiter=limit=0.93:attack=0.5:release=20:level=false
+highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.5:measured_TP=-0.3:measured_LRA=5.8:measured_thresh=-28.7:offset=0.2:linear=true:print_format=summary,alimiter=limit=0.93:attack=0.5:release=20:level=false
 ```
 
 **Full chain:**
 ```
-highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=50:release=200,treble=g=1.5:f=8000:t=s,asoftclip=type=quintic,loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.5:measured_TP=-0.3:measured_LRA=5.8:measured_thresh=-28.7:offset=0.2:linear=true:print_format=summary,alimiter=limit=0.93:attack=0.5:release=20:level=false
+highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,asoftclip=type=tanh,loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.5:measured_TP=-0.3:measured_LRA=5.8:measured_thresh=-28.7:offset=0.2:linear=true:print_format=summary,alimiter=limit=0.93:attack=0.5:release=20:level=false
 ```
 
 *(Note: measured values shown are examples; actual values come from pass 1 output)*
@@ -320,8 +298,7 @@ For non-music content (podcasts, audiobooks, voiceover), a simpler normalization
 |--------|-------------------|------------------------|
 | Target LUFS | -9 | -16 to -19 (profile-dependent) |
 | Highpass | 25 Hz | 25 Hz |
-| Compression | Conditional (crest >10, LRA >5) | None |
-| High Shelf | Always (+1.5 dB @ 8 kHz) | None |
-| Saturation | Conditional (LUFS <-16, TP <-1.5) | None |
+| Compression | Conditional | None |
+| Saturation | Conditional | None |
 | Limiter | Yes (-0.63 dBTP) | No (loudnorm handles peaks) |
 | Use case | Songs, mixes | Podcasts, audiobooks, VO |
