@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { join } from 'path';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir } from 'fs/promises';
 import { fileTypeFromBuffer } from 'file-type';
 import { uploadRequestSchema, ALLOWED_MIME_TYPES, type Preset } from '../schemas/upload';
 import { addAudioJob, getJobStatus, canAcceptJob, getQueueStatus } from '../services/queue';
@@ -91,10 +91,24 @@ upload.post('/', async (c) => {
   // Output format matches input format (no conversion)
   const outputFormat = ext.slice(1); // Remove leading dot
 
-  // Validate file type via magic bytes
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  const fileType = await fileTypeFromBuffer(buffer);
+  // Generate job ID and file paths
+  const jobId = nanoid(12);
+  const inputFilename = `${jobId}-input${ext}`;
+  const outputFilename = `${jobId}-output.${outputFormat}`;
+  const inputPath = join(env.UPLOAD_DIR, inputFilename);
+  const outputPath = join(env.OUTPUT_DIR, outputFilename);
+
+  // Ensure directories exist
+  await mkdir(env.UPLOAD_DIR, { recursive: true });
+  await mkdir(env.OUTPUT_DIR, { recursive: true });
+
+  // Stream file directly to disk (avoids loading entire file into memory)
+  await Bun.write(inputPath, file);
+
+  // Validate file type via magic bytes (read only first 64KB)
+  const savedFile = Bun.file(inputPath);
+  const headerBuffer = Buffer.from(await savedFile.slice(0, 65536).arrayBuffer());
+  const fileType = await fileTypeFromBuffer(headerBuffer);
 
   // Accept if:
   // 1. Detected MIME is in our explicit allow list, OR
@@ -107,23 +121,12 @@ upload.post('/', async (c) => {
     fileType.mime.startsWith('video/');
 
   if (!isValidMime) {
+    // Clean up invalid file
+    await Bun.write(inputPath, '').catch(() => {});
+    try { await import('fs/promises').then(fs => fs.unlink(inputPath)); } catch {}
     logger.warn({ detectedMime: fileType?.mime, ext }, 'Rejected file with invalid MIME type');
     throw new AppError(400, 'Invalid audio file format', 'INVALID_FORMAT');
   }
-
-  // Generate job ID and save file
-  const jobId = nanoid(12);
-  const inputFilename = `${jobId}-input${ext}`;
-  const outputFilename = `${jobId}-output.${outputFormat}`;
-  const inputPath = join(env.UPLOAD_DIR, inputFilename);
-  const outputPath = join(env.OUTPUT_DIR, outputFilename);
-
-  // Ensure directories exist
-  await mkdir(env.UPLOAD_DIR, { recursive: true });
-  await mkdir(env.OUTPUT_DIR, { recursive: true });
-
-  // Save uploaded file
-  await writeFile(inputPath, buffer);
 
   logger.info({ jobId, filename: file.name, size: file.size, preset, outputFormat }, 'File uploaded');
 

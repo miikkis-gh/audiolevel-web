@@ -330,12 +330,33 @@ export function buildMasteringFilterChain(analysis: MasteringAnalysis): {
 }
 
 /**
- * Run the mastering process (outputs to intermediate WAV)
+ * Get FFmpeg codec arguments for output format
+ */
+function getCodecArgs(format: string): string[] {
+  switch (format.toLowerCase()) {
+    case 'mp3':
+      return ['-c:a', 'libmp3lame', '-b:a', '320k'];
+    case 'flac':
+      return ['-c:a', 'flac'];
+    case 'aac':
+    case 'm4a':
+      return ['-c:a', 'aac', '-b:a', '256k'];
+    case 'ogg':
+      return ['-c:a', 'libvorbis', '-b:a', '192k'];
+    case 'wav':
+    default:
+      return ['-c:a', 'pcm_s24le'];
+  }
+}
+
+/**
+ * Run the mastering process (single-pass, outputs directly to target format)
  */
 export async function runMasteringProcess(
   inputPath: string,
   outputPath: string,
-  callbacks?: MasteringCallbacks
+  callbacks?: MasteringCallbacks,
+  outputFormat?: string
 ): Promise<MasteringResult> {
   const log = createChildLogger({ inputPath, outputPath });
   const startTime = Date.now();
@@ -364,15 +385,19 @@ export async function runMasteringProcess(
       saturationEnabled
     }, 'Filter chain built');
 
-    // Stage 3: Process
+    // Stage 3: Process (single-pass to target format)
     callbacks?.onStage?.('Applying mastering chain...');
     callbacks?.onProgress?.(30);
+
+    // Determine output format and get codec args
+    const format = outputFormat || outputPath.split('.').pop()?.toLowerCase() || 'wav';
+    const codecArgs = getCodecArgs(format);
 
     const { stderr, exitCode } = await runFFmpeg([
       '-i', inputPath,
       '-af', filterChain,
       '-ar', '48000',           // Output at 48kHz
-      '-c:a', 'pcm_s24le',      // 24-bit WAV intermediate
+      ...codecArgs,             // Format-specific codec args
       '-y',
       outputPath
     ]);

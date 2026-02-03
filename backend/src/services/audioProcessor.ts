@@ -24,7 +24,6 @@ import {
   DEFAULT_RESOURCE_LIMITS,
 } from '../utils/resourceLimiter';
 import { runMasteringProcess } from './masteringProcessor';
-import { convertFormat } from './formatConverter';
 import type { Preset } from '../schemas/upload';
 
 export interface ProcessingResult {
@@ -378,7 +377,7 @@ export async function verifyDependencies(): Promise<{
 }
 
 /**
- * Process mastering preset with custom FFmpeg pipeline
+ * Process mastering preset with custom FFmpeg pipeline (single-pass)
  */
 async function processMasteringPreset(
   options: NormalizeOptions,
@@ -389,99 +388,61 @@ async function processMasteringPreset(
   // Determine output format from the output path
   const outputFormat = options.outputPath.split('.').pop()?.toLowerCase() || 'wav';
 
-  // For mastering, we always process to WAV first, then convert
-  const intermediateWav = options.outputPath.replace(/\.[^.]+$/, `-mastered-${randomUUID().slice(0, 8)}.wav`);
+  // Single-pass: process and encode directly to target format
+  const masterResult = await runMasteringProcess(
+    options.inputPath,
+    options.outputPath,
+    {
+      onProgress: (percent) => {
+        // Map mastering progress to 10-95%
+        const mappedProgress = 10 + Math.floor((percent / 100) * 85);
+        callbacks?.onProgress?.(mappedProgress);
+      },
+      onStage: callbacks?.onStage,
+    },
+    outputFormat
+  );
 
-  try {
-    // Run mastering process
-    const masterResult = await runMasteringProcess(
-      options.inputPath,
-      outputFormat === 'wav' ? options.outputPath : intermediateWav,
-      {
-        onProgress: (percent) => {
-          // Map mastering progress to 10-80%
-          const mappedProgress = 10 + Math.floor((percent / 100) * 70);
-          callbacks?.onProgress?.(mappedProgress);
-        },
-        onStage: callbacks?.onStage,
-      }
-    );
-
-    if (!masterResult.success) {
-      return {
-        success: false,
-        error: masterResult.error || 'Mastering failed',
-        duration: Date.now() - startTime,
-      };
-    }
-
-    // If output format is not WAV, convert
-    if (outputFormat !== 'wav') {
-      callbacks?.onStage?.('Converting to output format...');
-      callbacks?.onProgress?.(85);
-
-      const convertResult = await convertFormat({
-        inputPath: intermediateWav,
-        outputPath: options.outputPath,
-        outputFormat,
-      });
-
-      // Clean up intermediate WAV
-      try {
-        await unlink(intermediateWav);
-      } catch (e) {
-        log.warn({ err: e }, 'Failed to clean up intermediate file');
-      }
-
-      if (!convertResult.success) {
-        return {
-          success: false,
-          error: convertResult.error || 'Format conversion failed',
-          duration: Date.now() - startTime,
-        };
-      }
-    }
-
-    callbacks?.onProgress?.(100);
-    const duration = Date.now() - startTime;
-
-    log.info({
-      duration,
-      filterChain: masterResult.filterChain,
-      decisions: masterResult.decisions,
-      inputLufs: masterResult.inputAnalysis?.integratedLufs,
-      outputLufs: masterResult.outputAnalysis?.integratedLufs,
-    }, 'Mastering preset complete');
-
+  if (!masterResult.success) {
     return {
-      success: true,
-      outputPath: options.outputPath,
-      duration,
-      // Identify which processing pipeline was used
-      processingType: 'mastering-pipeline' as const,
-      // Include mastering decisions for verification
-      masteringDecisions: masterResult.decisions,
-      // Include filter chain for debugging
-      filterChain: masterResult.filterChain,
-      // Analysis data
-      inputAnalysis: masterResult.inputAnalysis ? {
-        inputLufs: masterResult.inputAnalysis.integratedLufs,
-        inputTruePeak: masterResult.inputAnalysis.truePeak,
-        inputLoudnessRange: masterResult.inputAnalysis.lra,
-      } : undefined,
-      outputAnalysis: masterResult.outputAnalysis ? {
-        inputLufs: masterResult.outputAnalysis.integratedLufs,
-        inputTruePeak: masterResult.outputAnalysis.truePeak,
-        inputLoudnessRange: masterResult.outputAnalysis.lra,
-      } : undefined,
+      success: false,
+      error: masterResult.error || 'Mastering failed',
+      duration: Date.now() - startTime,
     };
-  } catch (err) {
-    // Clean up intermediate file on error
-    try {
-      await unlink(intermediateWav);
-    } catch (e) {
-      // Ignore
-    }
-    throw err;
   }
+
+  callbacks?.onProgress?.(100);
+  const duration = Date.now() - startTime;
+
+  log.info({
+    duration,
+    outputFormat,
+    filterChain: masterResult.filterChain,
+    decisions: masterResult.decisions,
+    inputLufs: masterResult.inputAnalysis?.integratedLufs,
+    outputLufs: masterResult.outputAnalysis?.integratedLufs,
+  }, 'Mastering preset complete (single-pass)');
+
+  return {
+    success: true,
+    outputPath: options.outputPath,
+    duration,
+    // Identify which processing pipeline was used
+    processingType: 'mastering-pipeline' as const,
+    // Include mastering decisions for verification
+    masteringDecisions: masterResult.decisions,
+    // Include filter chain for debugging
+    filterChain: masterResult.filterChain,
+    // Analysis data
+    inputAnalysis: masterResult.inputAnalysis ? {
+      inputLufs: masterResult.inputAnalysis.integratedLufs,
+      inputTruePeak: masterResult.inputAnalysis.truePeak,
+      inputLoudnessRange: masterResult.inputAnalysis.lra,
+    } : undefined,
+    outputAnalysis: masterResult.outputAnalysis ? {
+      inputLufs: masterResult.outputAnalysis.integratedLufs,
+      inputTruePeak: masterResult.outputAnalysis.truePeak,
+      inputLoudnessRange: masterResult.outputAnalysis.lra,
+    } : undefined,
+  };
 }
