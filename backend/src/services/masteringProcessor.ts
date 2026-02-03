@@ -17,6 +17,18 @@ export interface MasteringAnalysis {
   crestFactor: number;   // Peak - RMS (dynamics indicator)
 }
 
+/**
+ * Loudnorm analysis data logged for debugging and user display
+ */
+export interface LoudnormAnalysisLog {
+  input_i: number;        // Measured integrated loudness (LUFS)
+  input_tp: number;       // Measured true peak (dBTP)
+  input_lra: number;      // Measured loudness range (LU)
+  input_thresh: number;   // Measured threshold
+  offset: number;         // Gain offset applied
+  gain_applied_db: number; // How much the track was boosted/attenuated
+}
+
 export interface MasteringResult {
   success: boolean;
   outputPath?: string;
@@ -29,6 +41,7 @@ export interface MasteringResult {
     compressionEnabled: boolean;
     saturationEnabled: boolean;
   };
+  loudnormAnalysis?: LoudnormAnalysisLog;
 }
 
 export interface MasteringCallbacks {
@@ -299,7 +312,7 @@ export async function analyzeLoudnessForMastering(inputPath: string): Promise<Ma
 }
 
 /**
- * Build the pre-loudnorm filter chain (highpass, optional compression, optional saturation)
+ * Build the pre-loudnorm filter chain (highpass, optional compression + treble, optional saturation)
  */
 export function buildPreLoudnormChain(analysis: MasteringAnalysis): {
   filters: string[];
@@ -316,13 +329,18 @@ export function buildPreLoudnormChain(analysis: MasteringAnalysis): {
   // Compression decision: enable if crest factor > 10 AND LRA > 5
   if (analysis.crestFactor > 10 && analysis.lra > 5) {
     compressionEnabled = true;
-    filters.push('acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200');
+    // Attack=50ms preserves more transient punch (kick, snare snap) while still controlling dynamics
+    filters.push('acompressor=threshold=-18dB:ratio=2.5:attack=50:release=200');
+    // High-shelf boost restores "air" lost to compression (only when compressor is active)
+    filters.push('treble=g=1.5:f=8000:t=s');
   }
 
-  // Saturation decision: enable if LUFS < -12 AND true peak < -1.5
-  if (analysis.integratedLufs < -12 && analysis.truePeak < -1.5) {
+  // Saturation decision: enable if LUFS < -16 AND true peak < -1.5
+  // Conservative threshold ensures only genuinely quiet material gets harmonic enhancement
+  if (analysis.integratedLufs < -16 && analysis.truePeak < -1.5) {
     saturationEnabled = true;
-    filters.push('asoftclip=type=tanh');
+    // Quintic has gentler knee than tanh, fewer odd harmonics, more transparent sound
+    filters.push('asoftclip=type=quintic');
   }
 
   return { filters, compressionEnabled, saturationEnabled };
@@ -493,7 +511,24 @@ export async function runMasteringProcess(
       return { success: false, error: 'Failed to parse loudness measurements from first pass' };
     }
 
-    log.info({ measured }, 'Loudnorm measurements extracted');
+    // Calculate gain applied (difference between input and target -9 LUFS)
+    const TARGET_LUFS = -9;
+    const gainAppliedDb = TARGET_LUFS - measured.input_i;
+
+    // Build loudnorm analysis log for debugging and user display
+    const loudnormAnalysis: LoudnormAnalysisLog = {
+      input_i: measured.input_i,
+      input_tp: measured.input_tp,
+      input_lra: measured.input_lra,
+      input_thresh: measured.input_thresh,
+      offset: measured.target_offset,
+      gain_applied_db: gainAppliedDb,
+    };
+
+    log.info({
+      loudnormAnalysis,
+      measured,
+    }, 'Loudnorm measurements extracted');
 
     callbacks?.onProgress?.(40);
 
@@ -545,7 +580,11 @@ export async function runMasteringProcess(
     callbacks?.onProgress?.(100);
     const duration = Date.now() - startTime;
 
-    log.info({ duration, twoPass: true }, 'Mastering complete');
+    log.info({
+      duration,
+      twoPass: true,
+      gainApplied: loudnormAnalysis.gain_applied_db,
+    }, 'Mastering complete');
 
     return {
       success: true,
@@ -557,7 +596,8 @@ export async function runMasteringProcess(
       decisions: {
         compressionEnabled,
         saturationEnabled
-      }
+      },
+      loudnormAnalysis,
     };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown mastering error';
