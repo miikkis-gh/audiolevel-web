@@ -31,7 +31,7 @@ export const AUDIO_PROFILES: Record<AudioProfileType, AudioProfile> = {
     targetLufs: -14,
     targetTruePeak: -1,
     standard: 'Streaming (Spotify / Apple Music / YouTube)',
-    useMasteringChain: true,
+    useMasteringChain: false,
   },
   MUSIC_MIX: {
     type: 'MUSIC_MIX',
@@ -39,7 +39,7 @@ export const AUDIO_PROFILES: Record<AudioProfileType, AudioProfile> = {
     targetLufs: -14,
     targetTruePeak: -1,
     standard: 'Streaming (Spotify / Apple Music / YouTube)',
-    useMasteringChain: true,
+    useMasteringChain: false,
   },
   SPEECH_PODCAST: {
     type: 'SPEECH_PODCAST',

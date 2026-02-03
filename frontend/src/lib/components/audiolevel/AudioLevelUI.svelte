@@ -46,6 +46,7 @@
   let downloadDropdownOpen = $state(false);
   let zipping = $state(false);
   let rateLimitStatus = $state<RateLimitStatus | null>(null);
+  let now = $state(Date.now());
 
   // Job tracking
   let currentJobId = $state<string | null>(null);
@@ -60,6 +61,7 @@
   let unsubscribeProgress: (() => void) | null = null;
   let unsubscribeResults: (() => void) | null = null;
   let rateLimitInterval: ReturnType<typeof setInterval> | null = null;
+  let nowInterval: ReturnType<typeof setInterval> | null = null;
 
   // Fallback processing display info (when no profile detection available)
   const PROCESSING_FALLBACK = {
@@ -211,6 +213,7 @@
     }
     updateRateLimit();
     rateLimitInterval = setInterval(updateRateLimit, 30000); // Update every 30s
+    nowInterval = setInterval(() => { now = Date.now(); }, 1000); // Update timer every second
 
     // Subscribe to progress updates
     unsubscribeProgress = jobProgress.subscribe(($progress: Map<string, { percent: number; stage?: string }>) => {
@@ -305,6 +308,7 @@
     unsubscribeResults?.();
     disconnectWebSocket();
     if (rateLimitInterval) clearInterval(rateLimitInterval);
+    if (nowInterval) clearInterval(nowInterval);
   });
 
   // Close dropdown when clicking outside
@@ -1013,7 +1017,7 @@
       <div class="status-item">
         <span class="status-label">Resets</span>
         <span class="status-value">
-          {Math.ceil((rateLimitStatus.resetAt - Date.now()) / 60000)}m
+          {Math.max(0, Math.ceil((rateLimitStatus.resetAt - now) / 60000))}m
         </span>
       </div>
     {/if}
