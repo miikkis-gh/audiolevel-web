@@ -133,12 +133,14 @@
         const ga = Math.min(1, t * 2.5);
         const n = Math.floor(particles.length * Math.max(0.08, t));
         const comp = s === 'complete';
-        const baseR = pc ? pc[0] : comp ? 120 : 140;
-        const baseG = pc ? pc[1] : comp ? 220 : 200;
-        const baseB = pc ? pc[2] : comp ? 200 : 250;
-        const twR = pc ? 30 : comp ? 40 : 60;
-        const twG = pc ? 25 : comp ? 20 : 40;
-        const twB = pc ? 20 : comp ? 30 : 0;
+        // Use profile color only during processing, default green for complete
+        const useProfileColor = pc && !comp;
+        const baseR = useProfileColor ? pc[0] : comp ? 120 : 140;
+        const baseG = useProfileColor ? pc[1] : comp ? 220 : 200;
+        const baseB = useProfileColor ? pc[2] : comp ? 200 : 250;
+        const twR = useProfileColor ? 30 : comp ? 40 : 60;
+        const twG = useProfileColor ? 25 : comp ? 20 : 40;
+        const twB = useProfileColor ? 20 : comp ? 30 : 0;
 
         for (let i = 0; i < n; i++) {
           const pt = particles[i];
@@ -170,7 +172,7 @@
           const ca = t * 0.12;
           const cR = spread * 0.3;
           const g = ctx.createRadialGradient(ctr, ctr, 0, ctr, ctr, cR);
-          const ccStr = pc ? `${pc[0]},${pc[1]},${pc[2]}` : comp ? '80,210,180' : '100,200,240';
+          const ccStr = useProfileColor ? `${pc[0]},${pc[1]},${pc[2]}` : comp ? '80,210,180' : '100,200,240';
           g.addColorStop(0, `rgba(${ccStr},${ca})`);
           g.addColorStop(1, `rgba(${ccStr},0)`);
           ctx.beginPath();
@@ -202,15 +204,13 @@
           : 'aurora'
   );
 
-  // Dynamic glow for profile-colored spheres
+  // Dynamic glow for profile-colored spheres (only during processing, not complete)
   let coreStyle = $derived.by(() => {
     let style = `width: ${size}px; height: ${size}px;`;
-    if (profileColor && (pState === 'processing' || pState === 'complete')) {
+    if (profileColor && pState === 'processing') {
       const [r, g, b] = profileColor;
-      const o = pState === 'complete' ? 0.28 : 0.24;
-      style += `box-shadow: 0 0 50px rgba(${r},${g},${b},${o}), 0 0 100px rgba(${r},${g},${b},${o * 0.4});`;
+      style += `box-shadow: 0 0 50px rgba(${r},${g},${b},0.24), 0 0 100px rgba(${r},${g},${b},0.1);`;
       style += `background: radial-gradient(circle at 36% 32%, rgba(${r},${g},${b},.18) 0%, rgba(${(r / 3) | 0},${(g / 3) | 0},${(b / 3) | 0},.42) 35%, rgba(12,18,40,.92) 70%, rgba(6,7,11,1) 100%);`;
-      if (pState === 'complete') style += 'animation: none;';
     }
     return style;
   });
