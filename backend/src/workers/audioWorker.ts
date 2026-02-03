@@ -56,6 +56,11 @@ async function processAudioJob(
         success: true,
         outputPath: result.outputPath,
         duration: result.duration,
+        processingType: result.processingType,
+        masteringDecisions: result.masteringDecisions,
+        filterChain: result.filterChain,
+        inputAnalysis: result.inputAnalysis,
+        outputAnalysis: result.outputAnalysis,
       };
     } else {
       log.error({ error: result.error }, 'Audio processing failed');
