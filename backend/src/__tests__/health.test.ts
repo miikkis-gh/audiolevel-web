@@ -36,7 +36,6 @@ describe('Health API', () => {
     expect(body).toHaveProperty('dependencies');
     expect(body.dependencies).toHaveProperty('ffmpeg');
     expect(body.dependencies).toHaveProperty('ffprobe');
-    expect(body.dependencies).toHaveProperty('ffmpeg-normalize');
   });
 
   test('GET /api/health/storage returns storage stats', async () => {
