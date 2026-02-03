@@ -822,7 +822,8 @@
       </div>
       <div class="explainer">
         Normalize your audio to broadcast standards.<br />
-        Supports WAV, MP3, FLAC, AAC, OGG. Up to 100MB.
+        Drop files → auto-detect content type → download processed audio.<br />
+        <span class="explainer-hint">After processing, tap the icon in the bottom right for a detailed analysis report.</span>
       </div>
     {/if}
 
@@ -1166,10 +1167,17 @@
     font-family: 'Outfit', sans-serif;
     font-weight: 300;
     font-size: 13px;
-    line-height: 1.6;
+    line-height: 1.8;
     color: rgba(255, 255, 255, 0.2);
     text-align: center;
     animation: fadeUp 0.6s ease-out 0.1s both;
+  }
+
+  .explainer-hint {
+    display: block;
+    margin-top: 8px;
+    font-size: 11px;
+    color: rgba(80, 210, 180, 0.25);
   }
 
   .progress-num {
