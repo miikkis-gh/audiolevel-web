@@ -1310,7 +1310,7 @@
 
   .report-trigger {
     position: fixed;
-    bottom: 24px;
+    bottom: 60px;
     right: 24px;
     width: 36px;
     height: 36px;
