@@ -820,6 +820,10 @@
       <div class="idle-label">
         {dragOver ? 'Release to process' : 'Drop audio files or click'}
       </div>
+      <div class="explainer">
+        Normalize your audio to broadcast standards.<br />
+        Supports WAV, MP3, FLAC, AAC, OGG. Up to 100MB.
+      </div>
     {/if}
 
     {#if mode === 'processing'}
@@ -1155,6 +1159,17 @@
     text-align: center;
     letter-spacing: 0.5px;
     animation: fadeUp 0.5s ease-out;
+  }
+
+  .explainer {
+    margin-top: 24px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 300;
+    font-size: 13px;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.2);
+    text-align: center;
+    animation: fadeUp 0.6s ease-out 0.1s both;
   }
 
   .progress-num {
