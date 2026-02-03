@@ -110,15 +110,17 @@ upload.post('/', async (c) => {
   const headerBuffer = Buffer.from(await savedFile.slice(0, 65536).arrayBuffer());
   const fileType = await fileTypeFromBuffer(headerBuffer);
 
-  // Accept if:
+  // Accept if file-type detects a valid audio/video format:
   // 1. Detected MIME is in our explicit allow list, OR
   // 2. Detected MIME starts with audio/, OR
-  // 3. Detected MIME starts with video/ (m4a, webm use video containers), OR
-  // 4. fileType is undefined but extension is valid (some formats aren't detected)
-  const isValidMime = !fileType || // Allow if undetected (extension already validated)
+  // 3. Detected MIME starts with video/ (m4a, webm use video containers)
+  // Note: We require file-type detection to succeed - this rejects non-audio files
+  // that might have valid extensions but invalid content
+  const isValidMime = fileType && (
     ALLOWED_MIME_TYPES.includes(fileType.mime as any) ||
     fileType.mime.startsWith('audio/') ||
-    fileType.mime.startsWith('video/');
+    fileType.mime.startsWith('video/')
+  );
 
   if (!isValidMime) {
     // Clean up invalid file
