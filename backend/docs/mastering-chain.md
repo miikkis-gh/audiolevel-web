@@ -44,12 +44,6 @@ Input Audio
     │                                                         │
     ▼                                                         │
 ┌─────────────────────────────────────────┐                   │
-│  3b. TREBLE SHELF (conditional)         │                   │
-│  Enabled when compressor is enabled     │                   │
-└─────────────────────────────────────────┘                   │
-    │                                                         │
-    ▼                                                         │
-┌─────────────────────────────────────────┐                   │
 │  4. SATURATION (conditional)            │                   │
 │  Enabled if: LUFS < -12 AND TP < -1.5   │                   │
 └─────────────────────────────────────────┘                   │
@@ -137,36 +131,18 @@ This is a gentle 12 dB/octave rolloff that doesn't affect audible bass.
 
 ---
 
-### 3b. Treble Shelf (Conditional)
-
-**FFmpeg filter:** `treble=g=1.5:f=8000:t=s`
-
-**Enabled when:** Compressor is enabled (same condition)
-
-**Parameters:**
-
-| Parameter | Value | Purpose |
-|-----------|-------|---------|
-| g | 1.5 dB | Subtle boost |
-| f | 8000 Hz | Shelf starts at 8 kHz |
-| t | s | Shelf type (not peaking) |
-
-**Rationale:** Compression tends to reduce perceived brightness because high-frequency transients get attenuated along with everything else. This gentle shelf restores "air" and presence without sounding harsh. Only applied when compressor is active, since that's when top-end loss occurs.
-
----
-
 ### 4. Saturation (Conditional)
 
-**FFmpeg filter:** `asoftclip=type=quintic`
+**FFmpeg filter:** `asoftclip=type=tanh`
 
 **Enabled when:**
 - Integrated LUFS < -12 (quiet source material)
 - AND True Peak < -1.5 dBTP (headroom available)
 
-**Effect:** Applies quintic soft clipping, which:
-- Has a gentler knee than tanh, producing fewer odd harmonics
-- Adds harmonic warmth/density with more transparent sound
-- Gently limits peaks without sounding "crunchy" on transients
+**Effect:** Applies hyperbolic tangent soft clipping, which:
+- Adds harmonic warmth/density
+- Gently limits peaks
+- Increases perceived loudness without hard clipping
 
 **Rationale:** Quiet source material benefits from harmonic enhancement before loudness normalization. Material that's already loud or peaks near 0 dBTP is left clean.
 
@@ -283,12 +259,12 @@ highpass=f=25,loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json
 
 **With compression (dynamic input):**
 ```
-highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,treble=g=1.5:f=8000:t=s,loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json
+highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json
 ```
 
 **Full chain (quiet, dynamic input):**
 ```
-highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,treble=g=1.5:f=8000:t=s,asoftclip=type=quintic,loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json
+highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,asoftclip=type=tanh,loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json
 ```
 
 ### Pass 2 (Linear Processing)
@@ -302,12 +278,12 @@ highpass=f=25,loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.5:measured_TP=-0.3:meas
 
 **With compression:**
 ```
-highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,treble=g=1.5:f=8000:t=s,loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.5:measured_TP=-0.3:measured_LRA=5.8:measured_thresh=-28.7:offset=0.2:linear=true:print_format=summary,alimiter=limit=0.93:attack=0.5:release=20:level=false
+highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.5:measured_TP=-0.3:measured_LRA=5.8:measured_thresh=-28.7:offset=0.2:linear=true:print_format=summary,alimiter=limit=0.93:attack=0.5:release=20:level=false
 ```
 
 **Full chain:**
 ```
-highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,treble=g=1.5:f=8000:t=s,asoftclip=type=quintic,loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.5:measured_TP=-0.3:measured_LRA=5.8:measured_thresh=-28.7:offset=0.2:linear=true:print_format=summary,alimiter=limit=0.93:attack=0.5:release=20:level=false
+highpass=f=25,acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200,asoftclip=type=tanh,loudnorm=I=-9:TP=-1.0:LRA=5:measured_I=-18.5:measured_TP=-0.3:measured_LRA=5.8:measured_thresh=-28.7:offset=0.2:linear=true:print_format=summary,alimiter=limit=0.93:attack=0.5:release=20:level=false
 ```
 
 *(Note: measured values shown are examples; actual values come from pass 1 output)*
@@ -322,8 +298,7 @@ For non-music content (podcasts, audiobooks, voiceover), a simpler normalization
 |--------|-------------------|------------------------|
 | Target LUFS | -9 | -16 to -19 (profile-dependent) |
 | Highpass | 25 Hz | 25 Hz |
-| Compression | Conditional (crest >10, LRA >5) | None |
-| Treble Shelf | Conditional (when compressed) | None |
-| Saturation | Conditional (LUFS <-12, TP <-1.5) | None |
+| Compression | Conditional | None |
+| Saturation | Conditional | None |
 | Limiter | Yes (-0.63 dBTP) | No (loudnorm handles peaks) |
 | Use case | Songs, mixes | Podcasts, audiobooks, VO |
