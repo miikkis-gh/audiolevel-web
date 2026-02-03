@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import { join } from 'path';
 import { mkdir } from 'fs/promises';
 import { fileTypeFromBuffer } from 'file-type';
-import { uploadRequestSchema, ALLOWED_MIME_TYPES, type Preset } from '../schemas/upload';
+import { ALLOWED_MIME_TYPES } from '../schemas/upload';
 import { addAudioJob, getJobStatus, canAcceptJob, getQueueStatus } from '../services/queue';
 import { AppError } from '../middleware/errorHandler';
 import { uploadRateLimiter } from '../middleware/rateLimit';
@@ -55,7 +55,6 @@ upload.post('/', async (c) => {
   const body = await c.req.parseBody();
 
   const file = body['file'];
-  const presetParam = body['preset'];
 
   if (!file || !(file instanceof File)) {
     throw new AppError(400, 'No file provided', 'NO_FILE');
@@ -77,10 +76,6 @@ upload.post('/', async (c) => {
   if (!queueCheck.allowed) {
     throw new AppError(503, queueCheck.reason || 'Server busy', 'QUEUE_OVERLOADED');
   }
-
-  // Validate preset
-  const presetResult = uploadRequestSchema.safeParse({ preset: presetParam });
-  const preset: Preset = presetResult.success ? presetResult.data.preset : 'podcast';
 
   // Check file extension
   const ext = '.' + (file.name.split('.').pop()?.toLowerCase() || '');
@@ -130,14 +125,15 @@ upload.post('/', async (c) => {
     throw new AppError(400, 'Invalid audio file format', 'INVALID_FORMAT');
   }
 
-  logger.info({ jobId, filename: file.name, size: file.size, preset, outputFormat }, 'File uploaded');
+  logger.info({ jobId, filename: file.name, size: file.size, outputFormat }, 'File uploaded');
 
   // Add job to queue with file size for priority calculation
+  // Always use mastering pipeline for optimal audio quality
   await addAudioJob({
     jobId,
     inputPath,
     outputPath,
-    preset,
+    preset: 'mastering',
     originalName: file.name,
     fileSize: file.size,
   });
@@ -145,7 +141,6 @@ upload.post('/', async (c) => {
   return c.json({
     jobId,
     status: 'queued',
-    preset,
     outputFormat,
     originalName: file.name,
     estimatedWaitTime: queueCheck.estimatedWaitTime,
@@ -210,7 +205,6 @@ upload.get('/job/:id/download', async (c) => {
     fileSize,
     contentType,
     downloadFilename,
-    preset: status.data?.preset,
     processingType: status.result.processingType,
     masteringDecisions: status.result.masteringDecisions,
     filterChain: status.result.filterChain,

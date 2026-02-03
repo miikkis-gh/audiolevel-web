@@ -1,18 +1,8 @@
 const API_URL = import.meta.env.VITE_API_URL || '';
 
-export interface Preset {
-  id: string;
-  name: string;
-  description: string;
-  targetLufs: number;
-  truePeak: number;
-  loudnessRange?: number;
-}
-
 export interface UploadResponse {
   jobId: string;
   status: string;
-  preset: string;
   originalName: string;
 }
 
@@ -98,15 +88,6 @@ function getDefaultErrorMessage(status: number): string {
   }
 }
 
-export async function fetchPresets(): Promise<Preset[]> {
-  const response = await fetch(`${API_URL}/api/presets`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch presets');
-  }
-  const data = await response.json();
-  return data.presets;
-}
-
 export async function fetchRateLimitStatus(): Promise<RateLimitStatus> {
   const response = await fetch(`${API_URL}/api/upload/rate-limit`);
   if (!response.ok) {
@@ -123,10 +104,9 @@ export async function fetchQueueStatus(): Promise<QueueStatus> {
   return response.json();
 }
 
-export async function uploadFile(file: File, preset: string): Promise<UploadResponse> {
+export async function uploadFile(file: File): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('preset', preset);
 
   const response = await fetch(`${API_URL}/api/upload`, {
     method: 'POST',

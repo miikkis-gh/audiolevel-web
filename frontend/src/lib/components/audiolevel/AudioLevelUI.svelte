@@ -50,7 +50,6 @@
   // Job tracking
   let currentJobId = $state<string | null>(null);
   let currentDownloadUrl = $state<string | null>(null);
-  let currentPreset = $state('streaming'); // Default preset
 
   // Non-reactive refs
   let fileInput: HTMLInputElement;
@@ -62,32 +61,18 @@
   let unsubscribeResults: (() => void) | null = null;
   let rateLimitInterval: ReturnType<typeof setInterval> | null = null;
 
-  // Map preset to display name
-  const PRESET_DISPLAY_NAMES: Record<string, string> = {
-    podcast: 'Podcast / Talk',
-    broadcast: 'Broadcast',
-    youtube: 'YouTube',
-    streaming: 'Music / Song',
-    mastering: 'Music / Song',
-    audiobook: 'Audiobook',
-  };
-
-  const PRESET_STANDARDS: Record<string, string> = {
-    podcast: 'Podcast (Spotify / Apple compatible)',
-    broadcast: 'Broadcast (EBU R128)',
-    youtube: 'YouTube',
-    streaming: 'Streaming (Spotify / Apple Music / YouTube)',
-    mastering: 'Mastering (Professional)',
-    audiobook: 'Audiobook (ACX / Audible compatible)',
-  };
-
-  const PRESET_TARGETS: Record<string, string> = {
-    podcast: '-16 LUFS / -1.5 dBTP',
-    broadcast: '-23 LUFS / -2 dBTP',
-    youtube: '-14 LUFS / -1 dBTP',
-    streaming: '-14 LUFS / -1 dBTP',
-    mastering: '-9 LUFS / -0.5 dBTP',
-    audiobook: '-18 LUFS / -3 dBTP',
+  // Processing display info
+  const PROCESSING_INFO = {
+    mastering: {
+      displayName: 'Mastered Audio',
+      standard: 'Professional Mastering',
+      target: '-9 LUFS / -0.5 dBTP',
+    },
+    normalize: {
+      displayName: 'Normalized Audio',
+      standard: 'Broadcast Standard',
+      target: '-14 LUFS / -1 dBTP',
+    },
   };
 
   // Format number for display
@@ -107,12 +92,13 @@
   }
 
   // Build report from job result
-  function buildReportFromResult(result: JobResult, preset: string): SingleReportData {
-    const detectedAs = PRESET_DISPLAY_NAMES[preset] || 'Audio';
+  function buildReportFromResult(result: JobResult): SingleReportData {
+    const isMastering = result.processingType === 'mastering-pipeline';
+    const info = isMastering ? PROCESSING_INFO.mastering : PROCESSING_INFO.normalize;
     const notes: string[] = [];
 
     // Build notes based on processing
-    if (result.processingType === 'mastering-pipeline') {
+    if (isMastering) {
       if (result.masteringDecisions?.compressionEnabled) {
         notes.push('Compression applied — dynamic range was high');
       }
@@ -123,7 +109,6 @@
 
     if (result.inputAnalysis && result.outputAnalysis) {
       const inputPeak = result.inputAnalysis.inputTruePeak;
-      const outputPeak = result.outputAnalysis.inputTruePeak;
       if (inputPeak !== undefined && inputPeak > -1) {
         notes.push(`True peak exceeded -1 dBTP (was ${inputPeak.toFixed(1)} dBTP) — limiter applied`);
       }
@@ -138,10 +123,10 @@
     }
 
     return {
-      detectedAs,
+      detectedAs: info.displayName,
       confidence: 'HIGH',
       reasons: [
-        { signal: `Processing type: ${result.processingType || 'standard'}`, detail: 'normalization method used' },
+        { signal: `Processing: ${isMastering ? 'Mastering pipeline' : 'Normalization'}`, detail: 'processing method used' },
         { signal: `Duration: ${result.duration ? `${(result.duration / 1000).toFixed(1)}s` : 'N/A'}`, detail: 'processing time' },
       ],
       before: {
@@ -154,15 +139,15 @@
         truePeak: formatTruePeak(result.outputAnalysis?.inputTruePeak),
         lra: formatLra(result.outputAnalysis?.inputLoudnessRange),
       },
-      target: PRESET_TARGETS[preset] || '-14 LUFS / -1 dBTP',
-      standard: PRESET_STANDARDS[preset] || 'Streaming',
+      target: info.target,
+      standard: info.standard,
       notes,
     };
   }
 
   // Build batch report from job result
-  function buildBatchReportFromResult(result: JobResult, preset: string): BatchReportData {
-    const single = buildReportFromResult(result, preset);
+  function buildBatchReportFromResult(result: JobResult): BatchReportData {
+    const single = buildReportFromResult(result);
     return {
       type: single.detectedAs,
       conf: single.confidence,
@@ -176,7 +161,7 @@
   }
 
   // Fetch full job details and update report
-  async function fetchAndUpdateReport(jobId: string, preset: string): Promise<JobResult | null> {
+  async function fetchAndUpdateReport(jobId: string): Promise<JobResult | null> {
     try {
       const status = await getJobStatus(jobId);
       if (status.result) {
@@ -245,9 +230,9 @@
             currentDownloadUrl = result.downloadUrl;
 
             // Fetch full job details for report
-            fetchAndUpdateReport(currentJobId, currentPreset).then((jobResult) => {
+            fetchAndUpdateReport(currentJobId).then((jobResult) => {
               if (jobResult) {
-                singleReport = buildReportFromResult(jobResult, currentPreset);
+                singleReport = buildReportFromResult(jobResult);
               }
             });
 
@@ -272,11 +257,11 @@
               // Fetch full job details for report if not already done
               if (!processedCompletions.has(f.jobId)) {
                 processedCompletions.add(f.jobId);
-                fetchAndUpdateReport(f.jobId, currentPreset).then((jobResult) => {
+                fetchAndUpdateReport(f.jobId).then((jobResult) => {
                   if (jobResult) {
                     batchFiles = batchFiles.map((bf) => {
                       if (bf.jobId === f.jobId) {
-                        return { ...bf, report: buildBatchReportFromResult(jobResult, currentPreset) };
+                        return { ...bf, report: buildBatchReportFromResult(jobResult) };
                       }
                       return bf;
                     });
@@ -385,7 +370,7 @@
   async function uploadSingleFile(file: File) {
     try {
       errorMsg = '';
-      const response = await uploadFile(file, 'streaming'); // Default preset
+      const response = await uploadFile(file);
       currentJobId = response.jobId;
       subscribeToJob(response.jobId);
     } catch (err) {
@@ -412,7 +397,7 @@
     // Upload all files
     for (let i = 0; i < files.length; i++) {
       try {
-        const response = await uploadFile(files[i], 'streaming'); // Default preset
+        const response = await uploadFile(files[i]);
         batchFiles = batchFiles.map((f, idx) => {
           if (idx === i) {
             return { ...f, jobId: response.jobId };

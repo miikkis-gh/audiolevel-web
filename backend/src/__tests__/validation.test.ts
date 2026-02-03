@@ -1,46 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { uploadRequestSchema, ALLOWED_MIME_TYPES, PRESETS, type Preset } from '../schemas/upload';
-
-describe('Upload Request Validation', () => {
-  test('Valid preset values are accepted', () => {
-    const validPresets: Preset[] = ['podcast', 'broadcast', 'youtube', 'streaming', 'mastering', 'audiobook'];
-
-    for (const preset of validPresets) {
-      const result = uploadRequestSchema.safeParse({ preset });
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.preset).toBe(preset);
-      }
-    }
-  });
-
-  test('Invalid preset values are rejected', () => {
-    const invalidPresets = ['invalid', 'PODCAST', 'custom', '', 123];
-
-    for (const preset of invalidPresets) {
-      const result = uploadRequestSchema.safeParse({ preset });
-      expect(result.success).toBe(false);
-    }
-  });
-
-  test('Missing preset defaults to podcast', () => {
-    const result = uploadRequestSchema.safeParse({});
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.preset).toBe('podcast');
-    }
-  });
-
-  test('All expected presets are defined', () => {
-    expect(PRESETS).toContain('podcast');
-    expect(PRESETS).toContain('broadcast');
-    expect(PRESETS).toContain('youtube');
-    expect(PRESETS).toContain('streaming');
-    expect(PRESETS).toContain('mastering');
-    expect(PRESETS).toContain('audiobook');
-    expect(PRESETS.length).toBe(6);
-  });
-});
+import { ALLOWED_MIME_TYPES } from '../schemas/upload';
 
 describe('MIME Type Validation', () => {
   test('Common audio MIME types are allowed', () => {

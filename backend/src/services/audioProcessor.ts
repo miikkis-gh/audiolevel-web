@@ -1,16 +1,11 @@
-import { spawn, type Subprocess } from 'bun';
-import { randomUUID } from 'crypto';
-import { unlink } from 'fs/promises';
+import { spawn } from 'bun';
 import { env } from '../config/env';
 import { logger, createChildLogger } from '../utils/logger';
 import {
-  buildNormalizeCommand,
   buildAnalyzeCommand,
   buildProbeCommand,
   parseLoudnessAnalysis,
   parseProbeOutput,
-  parseNormalizeProgress,
-  type NormalizeOptions,
   type LoudnessAnalysis,
   type AudioMetadata,
 } from '../utils/ffmpeg';
@@ -20,18 +15,21 @@ import {
   getAdaptiveResourceLimits,
   incrementActiveProcesses,
   decrementActiveProcesses,
-  type ResourceLimits,
   DEFAULT_RESOURCE_LIMITS,
 } from '../utils/resourceLimiter';
 import { runMasteringProcess } from './masteringProcessor';
-import type { Preset } from '../schemas/upload';
+
+export interface ProcessingOptions {
+  inputPath: string;
+  outputPath: string;
+}
 
 export interface ProcessingResult {
   success: boolean;
   outputPath?: string;
   error?: string;
   duration?: number;
-  processingType?: 'ffmpeg-normalize' | 'direct-copy' | 'mastering-pipeline';
+  processingType?: 'mastering-pipeline';
   inputAnalysis?: LoudnessAnalysis;
   outputAnalysis?: LoudnessAnalysis;
   metadata?: AudioMetadata;
@@ -207,16 +205,16 @@ export async function analyzeLoudness(inputPath: string): Promise<LoudnessAnalys
 }
 
 /**
- * Normalize audio file
+ * Process audio file using mastering pipeline
+ * Applies: highpass filter, adaptive compression, saturation, loudness normalization, limiting
  */
-export async function normalizeAudio(
-  options: NormalizeOptions,
+export async function processAudio(
+  options: ProcessingOptions,
   callbacks?: ProcessingCallbacks
 ): Promise<ProcessingResult> {
   const log = createChildLogger({
     inputPath: options.inputPath,
     outputPath: options.outputPath,
-    preset: options.preset,
   });
 
   const startTime = Date.now();
@@ -234,96 +232,62 @@ export async function normalizeAudio(
 
     log.info({ metadata }, 'Audio metadata retrieved');
 
-    // === MASTERING PRESET: Use custom FFmpeg pipeline ===
-    if (options.preset === 'mastering') {
-      return await processMasteringPreset(options, callbacks, log, startTime);
-    }
+    // Determine output format from the output path
+    const outputFormat = options.outputPath.split('.').pop()?.toLowerCase() || 'wav';
 
-    // === OTHER PRESETS: Use ffmpeg-normalize as before ===
-
-    // Analyze input loudness
-    callbacks?.onStage?.('Measuring loudness...');
-    callbacks?.onProgress?.(10);
-    const inputAnalysis = await analyzeLoudness(options.inputPath);
-    if (inputAnalysis) {
-      log.info({ inputAnalysis }, 'Input loudness analysis complete');
-    }
-
-    // Run normalization with resource limits
-    callbacks?.onStage?.('Normalizing audio...');
-    callbacks?.onProgress?.(20);
-
-    const { command, args } = buildNormalizeCommand(options);
-    log.info({ command, args }, 'Starting normalization with resource limits');
-
-    let lastProgress = 20;
-    const { stdout, stderr, exitCode } = await executeWithTimeout(
-      command,
-      args,
-      env.PROCESSING_TIMEOUT_MS,
-      (output) => {
-        const progress = parseNormalizeProgress(output);
-        if (progress > lastProgress) {
-          // Map progress to 20-90 range
-          const mappedProgress = 20 + Math.floor((progress / 100) * 70);
-          lastProgress = mappedProgress;
+    // Run mastering pipeline (single-pass)
+    const masterResult = await runMasteringProcess(
+      options.inputPath,
+      options.outputPath,
+      {
+        onProgress: (percent) => {
+          // Map mastering progress to 10-95%
+          const mappedProgress = 10 + Math.floor((percent / 100) * 85);
           callbacks?.onProgress?.(mappedProgress);
-        }
+        },
+        onStage: callbacks?.onStage,
       },
-      true // Enable resource limits for main processing
+      outputFormat
     );
 
-    if (exitCode !== 0) {
-      log.error({ exitCode, stderr }, 'Normalization failed');
+    if (!masterResult.success) {
       return {
         success: false,
-        error: `Normalization failed: ${stderr.slice(0, 500)}`,
+        error: masterResult.error || 'Processing failed',
         duration: Date.now() - startTime,
       };
     }
-
-    // Verify output file exists
-    const outputFile = Bun.file(options.outputPath);
-    const exists = await outputFile.exists();
-    if (!exists) {
-      return {
-        success: false,
-        error: 'Output file was not created',
-        duration: Date.now() - startTime,
-      };
-    }
-
-    // Analyze output loudness
-    callbacks?.onStage?.('Verifying output...');
-    callbacks?.onProgress?.(95);
-    const outputAnalysis = await analyzeLoudness(options.outputPath);
 
     callbacks?.onProgress?.(100);
     const duration = Date.now() - startTime;
 
-    log.info(
-      {
-        duration,
-        inputLufs: inputAnalysis?.inputLufs,
-        outputLufs: outputAnalysis?.inputLufs,
-      },
-      'Normalization complete'
-    );
+    log.info({
+      duration,
+      outputFormat,
+      filterChain: masterResult.filterChain,
+      decisions: masterResult.decisions,
+      inputLufs: masterResult.inputAnalysis?.integratedLufs,
+      outputLufs: masterResult.outputAnalysis?.integratedLufs,
+    }, 'Audio processing complete');
 
     return {
       success: true,
       outputPath: options.outputPath,
       duration,
-      processingType: 'ffmpeg-normalize' as const,
-      inputAnalysis: inputAnalysis ?? undefined,
-      outputAnalysis: outputAnalysis
-        ? {
-            inputLufs: outputAnalysis.inputLufs,
-            inputTruePeak: outputAnalysis.inputTruePeak,
-            inputLoudnessRange: outputAnalysis.inputLoudnessRange,
-          }
-        : undefined,
-      metadata: metadata ?? undefined,
+      processingType: 'mastering-pipeline',
+      masteringDecisions: masterResult.decisions,
+      filterChain: masterResult.filterChain,
+      inputAnalysis: masterResult.inputAnalysis ? {
+        inputLufs: masterResult.inputAnalysis.integratedLufs,
+        inputTruePeak: masterResult.inputAnalysis.truePeak,
+        inputLoudnessRange: masterResult.inputAnalysis.lra,
+      } : undefined,
+      outputAnalysis: masterResult.outputAnalysis ? {
+        inputLufs: masterResult.outputAnalysis.integratedLufs,
+        inputTruePeak: masterResult.outputAnalysis.truePeak,
+        inputLoudnessRange: masterResult.outputAnalysis.lra,
+      } : undefined,
+      metadata,
     };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -338,17 +302,15 @@ export async function normalizeAudio(
 }
 
 /**
- * Verify FFmpeg and ffmpeg-normalize are available
+ * Verify FFmpeg is available
  */
 export async function verifyDependencies(): Promise<{
   ffmpeg: boolean;
   ffprobe: boolean;
-  ffmpegNormalize: boolean;
 }> {
   const results = {
     ffmpeg: false,
     ffprobe: false,
-    ffmpegNormalize: false,
   };
 
   try {
@@ -365,84 +327,9 @@ export async function verifyDependencies(): Promise<{
     results.ffprobe = false;
   }
 
-  try {
-    const normalizeCheck = await executeWithTimeout('ffmpeg-normalize', ['--version'], 5000);
-    results.ffmpegNormalize = normalizeCheck.exitCode === 0;
-  } catch {
-    results.ffmpegNormalize = false;
-  }
-
   logger.info({ dependencies: results }, 'Dependency check complete');
   return results;
 }
 
-/**
- * Process mastering preset with custom FFmpeg pipeline (single-pass)
- */
-async function processMasteringPreset(
-  options: NormalizeOptions,
-  callbacks: ProcessingCallbacks | undefined,
-  log: ReturnType<typeof createChildLogger>,
-  startTime: number
-): Promise<ProcessingResult> {
-  // Determine output format from the output path
-  const outputFormat = options.outputPath.split('.').pop()?.toLowerCase() || 'wav';
-
-  // Single-pass: process and encode directly to target format
-  const masterResult = await runMasteringProcess(
-    options.inputPath,
-    options.outputPath,
-    {
-      onProgress: (percent) => {
-        // Map mastering progress to 10-95%
-        const mappedProgress = 10 + Math.floor((percent / 100) * 85);
-        callbacks?.onProgress?.(mappedProgress);
-      },
-      onStage: callbacks?.onStage,
-    },
-    outputFormat
-  );
-
-  if (!masterResult.success) {
-    return {
-      success: false,
-      error: masterResult.error || 'Mastering failed',
-      duration: Date.now() - startTime,
-    };
-  }
-
-  callbacks?.onProgress?.(100);
-  const duration = Date.now() - startTime;
-
-  log.info({
-    duration,
-    outputFormat,
-    filterChain: masterResult.filterChain,
-    decisions: masterResult.decisions,
-    inputLufs: masterResult.inputAnalysis?.integratedLufs,
-    outputLufs: masterResult.outputAnalysis?.integratedLufs,
-  }, 'Mastering preset complete (single-pass)');
-
-  return {
-    success: true,
-    outputPath: options.outputPath,
-    duration,
-    // Identify which processing pipeline was used
-    processingType: 'mastering-pipeline' as const,
-    // Include mastering decisions for verification
-    masteringDecisions: masterResult.decisions,
-    // Include filter chain for debugging
-    filterChain: masterResult.filterChain,
-    // Analysis data
-    inputAnalysis: masterResult.inputAnalysis ? {
-      inputLufs: masterResult.inputAnalysis.integratedLufs,
-      inputTruePeak: masterResult.inputAnalysis.truePeak,
-      inputLoudnessRange: masterResult.inputAnalysis.lra,
-    } : undefined,
-    outputAnalysis: masterResult.outputAnalysis ? {
-      inputLufs: masterResult.outputAnalysis.integratedLufs,
-      inputTruePeak: masterResult.outputAnalysis.truePeak,
-      inputLoudnessRange: masterResult.outputAnalysis.lra,
-    } : undefined,
-  };
-}
+// Keep old function name as alias for backwards compatibility
+export const normalizeAudio = processAudio;

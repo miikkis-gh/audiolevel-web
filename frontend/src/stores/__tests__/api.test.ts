@@ -1,12 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  fetchPresets,
   uploadFile,
   getJobStatus,
   fetchRateLimitStatus,
   fetchQueueStatus,
   getDownloadUrl,
-  type Preset,
   type RateLimitStatus,
   type QueueStatus,
   type JobStatus,
@@ -19,40 +17,11 @@ describe('API Store', () => {
     vi.mocked(fetch).mockReset();
   });
 
-  describe('fetchPresets', () => {
-    it('returns presets array on success', async () => {
-      const mockPresets: Preset[] = [
-        { id: 'streaming', name: 'Streaming', description: 'For Spotify/YouTube', targetLufs: -14, truePeak: -1 },
-        { id: 'podcast', name: 'Podcast', description: 'For podcasts', targetLufs: -16, truePeak: -1 },
-      ];
-
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ presets: mockPresets }),
-      } as Response);
-
-      const result = await fetchPresets();
-
-      expect(fetch).toHaveBeenCalledWith('/api/presets');
-      expect(result).toEqual(mockPresets);
-    });
-
-    it('throws error on non-ok response', async () => {
-      vi.mocked(fetch).mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      } as Response);
-
-      await expect(fetchPresets()).rejects.toThrow('Failed to fetch presets');
-    });
-  });
-
   describe('uploadFile', () => {
     it('sends FormData correctly and returns job response', async () => {
       const mockResponse: UploadResponse = {
         jobId: 'job-123',
         status: 'queued',
-        preset: 'streaming',
         originalName: 'test.mp3',
       };
 
@@ -62,7 +31,7 @@ describe('API Store', () => {
       } as Response);
 
       const file = new File(['audio content'], 'test.mp3', { type: 'audio/mpeg' });
-      const result = await uploadFile(file, 'streaming');
+      const result = await uploadFile(file);
 
       expect(fetch).toHaveBeenCalledWith('/api/upload', {
         method: 'POST',
@@ -73,7 +42,6 @@ describe('API Store', () => {
       const call = vi.mocked(fetch).mock.calls[0];
       const formData = call[1]?.body as FormData;
       expect(formData.get('file')).toBe(file);
-      expect(formData.get('preset')).toBe('streaming');
 
       expect(result).toEqual(mockResponse);
     });
@@ -89,7 +57,7 @@ describe('API Store', () => {
       const file = new File(['audio'], 'test.mp3', { type: 'audio/mpeg' });
 
       try {
-        await uploadFile(file, 'streaming');
+        await uploadFile(file);
         expect.fail('Should have thrown an error');
       } catch (error) {
         const apiError = error as ApiError;
@@ -110,7 +78,7 @@ describe('API Store', () => {
       const file = new File(['audio'], 'test.mp3', { type: 'audio/mpeg' });
 
       try {
-        await uploadFile(file, 'streaming');
+        await uploadFile(file);
         expect.fail('Should have thrown an error');
       } catch (error) {
         const apiError = error as ApiError;
@@ -130,7 +98,7 @@ describe('API Store', () => {
       const file = new File(['audio'], 'test.mp3', { type: 'audio/mpeg' });
 
       try {
-        await uploadFile(file, 'streaming');
+        await uploadFile(file);
         expect.fail('Should have thrown an error');
       } catch (error) {
         const apiError = error as ApiError;

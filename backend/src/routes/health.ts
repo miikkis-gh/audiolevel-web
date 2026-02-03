@@ -57,7 +57,7 @@ health.get('/ready', async (c) => {
 health.get('/dependencies', async (c) => {
   const deps = await verifyDependencies();
 
-  const allAvailable = deps.ffmpeg && deps.ffprobe && deps.ffmpegNormalize;
+  const allAvailable = deps.ffmpeg && deps.ffprobe;
 
   return c.json(
     {
@@ -65,7 +65,6 @@ health.get('/dependencies', async (c) => {
       dependencies: {
         ffmpeg: deps.ffmpeg ? 'available' : 'missing',
         ffprobe: deps.ffprobe ? 'available' : 'missing',
-        'ffmpeg-normalize': deps.ffmpegNormalize ? 'available' : 'missing',
       },
     },
     allAvailable ? 200 : 503
@@ -188,7 +187,7 @@ health.get('/summary', async (c) => {
   }
 
   // Check dependencies
-  if (!deps.ffmpeg || !deps.ffprobe || !deps.ffmpegNormalize) {
+  if (!deps.ffmpeg || !deps.ffprobe) {
     alerts.push('Missing audio processing dependencies');
     overallStatus = 'unhealthy';
   }
@@ -208,7 +207,7 @@ health.get('/summary', async (c) => {
         worker: workerStatus.running,
         queue: queueHealth.healthy,
         disk: diskStatus.status !== 'critical',
-        dependencies: deps.ffmpeg && deps.ffprobe && deps.ffmpegNormalize,
+        dependencies: deps.ffmpeg && deps.ffprobe,
       },
       queue: {
         status: queueHealth.metrics.status,

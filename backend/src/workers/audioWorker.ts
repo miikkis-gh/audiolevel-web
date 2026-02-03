@@ -1,6 +1,6 @@
 import { Worker, Job } from 'bullmq';
 import { getRedisClient } from '../services/redis';
-import { normalizeAudio, verifyDependencies } from '../services/audioProcessor';
+import { processAudio, verifyDependencies } from '../services/audioProcessor';
 import { env } from '../config/env';
 import { logger, createChildLogger } from '../utils/logger';
 import { emitJobProgress, emitJobComplete, emitJobError } from '../websocket/events';
@@ -9,14 +9,13 @@ import type { AudioJobData, AudioJobResult } from '../services/queue';
 let audioWorker: Worker<AudioJobData, AudioJobResult> | null = null;
 
 /**
- * Process an audio normalization job
+ * Process an audio job
  */
 async function processAudioJob(
   job: Job<AudioJobData, AudioJobResult>
 ): Promise<AudioJobResult> {
   const log = createChildLogger({
     jobId: job.data.jobId,
-    preset: job.data.preset,
     originalName: job.data.originalName,
   });
 
@@ -26,11 +25,10 @@ async function processAudioJob(
     // Update progress
     await job.updateProgress(0);
 
-    const result = await normalizeAudio(
+    const result = await processAudio(
       {
         inputPath: job.data.inputPath,
         outputPath: job.data.outputPath,
-        preset: job.data.preset as any,
       },
       {
         onProgress: async (percent) => {
@@ -90,9 +88,6 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
   const deps = await verifyDependencies();
   if (!deps.ffmpeg || !deps.ffprobe) {
     logger.error('FFmpeg or FFprobe not found. Audio processing will fail.');
-  }
-  if (!deps.ffmpegNormalize) {
-    logger.error('ffmpeg-normalize not found. Audio processing will fail.');
   }
 
   const connection = getRedisClient();

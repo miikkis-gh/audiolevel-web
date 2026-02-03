@@ -18,7 +18,6 @@ import {
   type WebSocketData,
 } from './websocket/handler';
 import healthRoutes from './routes/health';
-import presetsRoutes from './routes/presets';
 import uploadRoutes from './routes/upload';
 
 import { AppError, ERROR_MESSAGES } from './middleware/errorHandler';
@@ -71,7 +70,6 @@ app.use(
 
 // Routes
 app.route('/api/health', healthRoutes);
-app.route('/api/presets', presetsRoutes);
 app.route('/api/upload', uploadRoutes);
 
 // Job status route (alias for convenience)
@@ -87,7 +85,6 @@ app.get('/', (c) => {
     version: '1.0.0',
     endpoints: {
       health: '/api/health',
-      presets: '/api/presets',
       upload: '/api/upload',
       jobStatus: '/api/job/:id',
       download: '/api/job/:id/download',

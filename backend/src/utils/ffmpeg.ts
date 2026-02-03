@@ -1,92 +1,18 @@
-import { PRESET_CONFIGS, type PresetConfig } from '../schemas/presets';
-import type { Preset } from '../schemas/upload';
-
-export interface NormalizeOptions {
-  inputPath: string;
-  outputPath: string;
-  preset: Preset;
-  outputFormat?: string;
-}
-
 export interface LoudnessAnalysis {
   inputLufs: number;
   inputTruePeak: number;
   inputLoudnessRange: number;
-  outputLufs?: number;
-  outputTruePeak?: number;
 }
 
-export interface FFmpegNormalizeArgs {
+export interface FFmpegCommand {
   command: string;
   args: string[];
 }
 
 /**
- * Build ffmpeg-normalize command arguments
- */
-export function buildNormalizeCommand(options: NormalizeOptions): FFmpegNormalizeArgs {
-  const config = PRESET_CONFIGS[options.preset];
-  const args: string[] = [];
-
-  // Input file
-  args.push(options.inputPath);
-
-  // Output file
-  args.push('-o', options.outputPath);
-
-  // Target loudness (LUFS)
-  args.push('-t', config.targetLufs.toString());
-
-  // True peak limit
-  args.push('-tp', config.truePeak.toString());
-
-  // Loudness range target (if specified)
-  if (config.loudnessRange) {
-    args.push('--loudness-range-target', config.loudnessRange.toString());
-  }
-
-  // Audio codec settings based on output format
-  const ext = options.outputPath.split('.').pop()?.toLowerCase() || '';
-  const codecArgs = getCodecArgs(ext);
-  args.push(...codecArgs);
-
-  // Force overwrite
-  args.push('-f');
-
-  // Progress output (for parsing)
-  args.push('-pr');
-
-  return {
-    command: 'ffmpeg-normalize',
-    args,
-  };
-}
-
-/**
- * Get codec arguments based on output format
- */
-function getCodecArgs(format: string): string[] {
-  switch (format) {
-    case 'mp3':
-      return ['-c:a', 'libmp3lame', '-b:a', '320k'];
-    case 'flac':
-      return ['-c:a', 'flac'];
-    case 'aac':
-    case 'm4a':
-      return ['-c:a', 'aac', '-b:a', '256k'];
-    case 'ogg':
-      // Use bitrate instead of quality scale for ffmpeg-normalize compatibility
-      return ['-c:a', 'libvorbis', '-b:a', '192k'];
-    case 'wav':
-    default:
-      return ['-c:a', 'pcm_s16le'];
-  }
-}
-
-/**
  * Build FFmpeg command for loudness analysis
  */
-export function buildAnalyzeCommand(inputPath: string): FFmpegNormalizeArgs {
+export function buildAnalyzeCommand(inputPath: string): FFmpegCommand {
   return {
     command: 'ffmpeg',
     args: [
@@ -122,49 +48,9 @@ export function parseLoudnessAnalysis(stderr: string): LoudnessAnalysis | null {
 }
 
 /**
- * Parse progress from ffmpeg-normalize output
- * Returns percentage (0-100)
- */
-export function parseNormalizeProgress(output: string): number {
-  // ffmpeg-normalize outputs progress like: "Normalizing file 1/1... 50%"
-  const progressMatch = output.match(/(\d+)%/);
-  if (progressMatch) {
-    return parseInt(progressMatch[1], 10);
-  }
-
-  // Also check for stage indicators
-  if (output.includes('First pass')) {
-    return 10;
-  }
-  if (output.includes('Second pass')) {
-    return 50;
-  }
-  if (output.includes('Writing')) {
-    return 90;
-  }
-
-  return 0;
-}
-
-/**
- * Get audio file duration using FFprobe
- */
-export function buildDurationCommand(inputPath: string): FFmpegNormalizeArgs {
-  return {
-    command: 'ffprobe',
-    args: [
-      '-v', 'error',
-      '-show_entries', 'format=duration',
-      '-of', 'default=noprint_wrappers=1:nokey=1',
-      inputPath,
-    ],
-  };
-}
-
-/**
  * Get audio file metadata using FFprobe
  */
-export function buildProbeCommand(inputPath: string): FFmpegNormalizeArgs {
+export function buildProbeCommand(inputPath: string): FFmpegCommand {
   return {
     command: 'ffprobe',
     args: [
