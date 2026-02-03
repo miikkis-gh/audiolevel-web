@@ -29,6 +29,7 @@ export interface MasteringResult {
     compressionEnabled: boolean;
     saturationEnabled: boolean;
   };
+  loudnormLog?: LoudnormAnalysisLog;
 }
 
 export interface MasteringCallbacks {
@@ -53,6 +54,18 @@ export interface LoudnormMeasured {
   input_lra: number;    // measured loudness range
   input_thresh: number; // measured threshold
   target_offset: number; // calculated offset
+}
+
+/**
+ * Loudnorm analysis log for debugging and user display
+ */
+export interface LoudnormAnalysisLog {
+  measured_I: number;        // input integrated loudness (LUFS)
+  measured_TP: number;       // input true peak (dBTP)
+  measured_LRA: number;      // input loudness range (LU)
+  measured_thresh: number;   // gate threshold
+  offset: number;            // gain offset applied
+  gain_applied_db: number;   // total gain adjustment (target_I - measured_I + offset)
 }
 
 /**
@@ -299,7 +312,7 @@ export async function analyzeLoudnessForMastering(inputPath: string): Promise<Ma
 }
 
 /**
- * Build the pre-loudnorm filter chain (highpass, optional compression, optional saturation)
+ * Build the pre-loudnorm filter chain (highpass, optional compression, high shelf, optional saturation)
  */
 export function buildPreLoudnormChain(analysis: MasteringAnalysis): {
   filters: string[];
@@ -314,15 +327,20 @@ export function buildPreLoudnormChain(analysis: MasteringAnalysis): {
   filters.push('highpass=f=25');
 
   // Compression decision: enable if crest factor > 10 AND LRA > 5
+  // 50ms attack preserves transient punch (kick, snare snap)
   if (analysis.crestFactor > 10 && analysis.lra > 5) {
     compressionEnabled = true;
-    filters.push('acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200');
+    filters.push('acompressor=threshold=-18dB:ratio=2.5:attack=50:release=200');
   }
 
-  // Saturation decision: enable if LUFS < -12 AND true peak < -1.5
-  if (analysis.integratedLufs < -12 && analysis.truePeak < -1.5) {
+  // High shelf always on - restores air and presence (+1.5 dB at 8 kHz)
+  filters.push('treble=g=1.5:f=8000:t=s');
+
+  // Saturation decision: enable if LUFS < -16 AND true peak < -1.5
+  // Conservative threshold ensures only genuinely quiet material gets harmonic enhancement
+  if (analysis.integratedLufs < -16 && analysis.truePeak < -1.5) {
     saturationEnabled = true;
-    filters.push('asoftclip=type=tanh');
+    filters.push('asoftclip=type=quintic');
   }
 
   return { filters, compressionEnabled, saturationEnabled };
@@ -493,7 +511,19 @@ export async function runMasteringProcess(
       return { success: false, error: 'Failed to parse loudness measurements from first pass' };
     }
 
-    log.info({ measured }, 'Loudnorm measurements extracted');
+    // Calculate total gain adjustment and create analysis log
+    const TARGET_LUFS = -9;
+    const gainAppliedDb = TARGET_LUFS - measured.input_i + measured.target_offset;
+    const loudnormLog: LoudnormAnalysisLog = {
+      measured_I: measured.input_i,
+      measured_TP: measured.input_tp,
+      measured_LRA: measured.input_lra,
+      measured_thresh: measured.input_thresh,
+      offset: measured.target_offset,
+      gain_applied_db: gainAppliedDb,
+    };
+
+    log.info({ measured, loudnormLog }, 'Loudnorm measurements extracted');
 
     callbacks?.onProgress?.(40);
 
@@ -557,7 +587,8 @@ export async function runMasteringProcess(
       decisions: {
         compressionEnabled,
         saturationEnabled
-      }
+      },
+      loudnormLog
     };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown mastering error';
