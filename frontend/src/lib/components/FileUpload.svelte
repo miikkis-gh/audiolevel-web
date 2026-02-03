@@ -162,7 +162,7 @@
       <input
         bind:this={fileInput}
         type="file"
-        accept="audio/*,.wav,.mp3,.flac,.aac,.ogg,.m4a"
+        accept="audio/*,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/flac,audio/x-flac,audio/aac,audio/mp4,audio/x-m4a,audio/ogg,.mp3,.wav,.flac,.aac,.ogg,.m4a,.aiff,.aif"
         class="hidden"
         onchange={handleFileInput}
         {disabled}
