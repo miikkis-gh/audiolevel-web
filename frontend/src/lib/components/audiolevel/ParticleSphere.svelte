@@ -25,7 +25,8 @@
   let canvasEl: HTMLCanvasElement;
 
   // Non-reactive refs for animation loop
-  let currentProgress = progress;
+  let targetProgress = progress;
+  let displayProgress = 0; // Smoothly interpolated progress for animation
   let currentState = pState;
   let currentColor = profileColor;
   let frameCount = 0;
@@ -56,9 +57,13 @@
 
   // Keep refs in sync
   $effect(() => {
-    currentProgress = progress;
+    targetProgress = progress;
   });
   $effect(() => {
+    // Reset display progress when starting a new job
+    if (pState === 'processing' && currentState !== 'processing') {
+      displayProgress = 0;
+    }
     currentState = pState;
   });
   $effect(() => {
@@ -85,10 +90,19 @@
       ctx.clearRect(0, 0, px, px);
 
       const s = currentState;
-      const p = currentProgress;
       const pc = currentColor;
       const active = s === 'processing' || s === 'complete';
       const isIdle = s === 'idle';
+
+      // Smoothly interpolate displayProgress towards targetProgress
+      // Use faster lerp when jumping forward, slower for smooth visual
+      const lerpSpeed = targetProgress > displayProgress ? 0.08 : 0.12;
+      displayProgress += (targetProgress - displayProgress) * lerpSpeed;
+      // Clamp to avoid floating point drift
+      if (Math.abs(displayProgress - targetProgress) < 0.1) {
+        displayProgress = targetProgress;
+      }
+      const p = displayProgress;
 
       // Mini spheres sleep when idle; large sphere runs aurora
       if (!active && (mini || !isIdle)) {
@@ -96,41 +110,8 @@
         return;
       }
 
-      // Aurora: idle large sphere
+      // Idle large sphere: subtle ambient glow only, no particles
       if (isIdle && !mini) {
-        const rot = frameCount * 0.0015;
-        const len = particles.length;
-        for (let i = 0; i < len; i++) {
-          const pt = particles[i];
-          pt.angle += pt.speed * 0.3 + pt.drift * 0.5 * Math.sin(frameCount * 0.015);
-          const tw = 0.5 + 0.5 * Math.sin(frameCount * pt.ts + pt.phase);
-          const r = maxR * pt.rf * 0.82;
-          const x = ctr + Math.cos(pt.angle) * r;
-          const y = ctr + Math.sin(pt.angle) * r;
-          const ca = ((pt.angle + rot) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-          const cf = (ca / (Math.PI * 2)) * PROFILE_COLOR_LIST.length;
-          const ci = Math.floor(cf) % PROFILE_COLOR_LIST.length;
-          const ni = (ci + 1) % PROFILE_COLOR_LIST.length;
-          const bl = cf - Math.floor(cf);
-          const c1 = PROFILE_COLOR_LIST[ci];
-          const c2 = PROFILE_COLOR_LIST[ni];
-          const cr = (c1[0] + (c2[0] - c1[0]) * bl + tw * 20) | 0;
-          const cg = (c1[1] + (c2[1] - c1[1]) * bl + tw * 15) | 0;
-          const cb = (c1[2] + (c2[2] - c1[2]) * bl + tw * 10) | 0;
-          const al = (0.14 + tw * 0.16) * pt.br;
-          if (al < 0.01) continue;
-          const ds = pt.sz * 0.9 * (0.8 + tw * 0.4);
-          ctx.beginPath();
-          ctx.arc(x, y, ds, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${cr},${cg},${cb},${al})`;
-          ctx.fill();
-          if (ds > 0.8 && al > 0.15) {
-            ctx.beginPath();
-            ctx.arc(x, y, ds * 2.5, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(${cr},${cg},${cb},${al * 0.15})`;
-            ctx.fill();
-          }
-        }
         const gRot = frameCount * 0.001;
         const gA = Math.sin(gRot) * 0.5 + 0.5;
         const gB = Math.sin(gRot + 2.1) * 0.5 + 0.5;
