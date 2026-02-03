@@ -317,12 +317,14 @@ export function buildPreLoudnormChain(analysis: MasteringAnalysis): {
   if (analysis.crestFactor > 10 && analysis.lra > 5) {
     compressionEnabled = true;
     filters.push('acompressor=threshold=-18dB:ratio=2.5:attack=30:release=200');
+    // Treble shelf to restore air lost during compression
+    filters.push('treble=g=1.5:f=8000:t=s');
   }
 
   // Saturation decision: enable if LUFS < -12 AND true peak < -1.5
   if (analysis.integratedLufs < -12 && analysis.truePeak < -1.5) {
     saturationEnabled = true;
-    filters.push('asoftclip=type=tanh');
+    filters.push('asoftclip=type=quintic');
   }
 
   return { filters, compressionEnabled, saturationEnabled };
