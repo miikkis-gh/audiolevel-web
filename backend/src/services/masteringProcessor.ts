@@ -45,6 +45,17 @@ export interface PreflightResult {
 }
 
 /**
+ * Measured values from loudnorm first pass (used for linear mode in second pass)
+ */
+export interface LoudnormMeasured {
+  input_i: number;      // measured integrated loudness
+  input_tp: number;     // measured true peak
+  input_lra: number;    // measured loudness range
+  input_thresh: number; // measured threshold
+  target_offset: number; // calculated offset
+}
+
+/**
  * Run FFmpeg command and capture output
  */
 async function runFFmpeg(
@@ -288,10 +299,10 @@ export async function analyzeLoudnessForMastering(inputPath: string): Promise<Ma
 }
 
 /**
- * Build the mastering filter chain based on analysis
+ * Build the pre-loudnorm filter chain (highpass, optional compression, optional saturation)
  */
-export function buildMasteringFilterChain(analysis: MasteringAnalysis): {
-  filterChain: string;
+export function buildPreLoudnormChain(analysis: MasteringAnalysis): {
+  filters: string[];
   compressionEnabled: boolean;
   saturationEnabled: boolean;
 } {
@@ -314,12 +325,84 @@ export function buildMasteringFilterChain(analysis: MasteringAnalysis): {
     filters.push('asoftclip=type=tanh');
   }
 
-  // Loudness normalization to -9 LUFS with conservative true peak (-1.0 dBTP)
-  // This leaves headroom for the limiter
-  filters.push('loudnorm=I=-9:TP=-1.0:LRA=5:print_format=summary');
+  return { filters, compressionEnabled, saturationEnabled };
+}
+
+/**
+ * Build the first-pass filter chain for loudnorm measurement
+ * Runs the pre-processing chain + loudnorm with print_format=json to get measured values
+ */
+export function buildFirstPassChain(preFilters: string[]): string {
+  const filters = [...preFilters];
+  // Loudnorm in measurement mode - outputs JSON with measured values
+  filters.push('loudnorm=I=-9:TP=-1.0:LRA=5:print_format=json');
+  return filters.join(',');
+}
+
+/**
+ * Build the second-pass filter chain with linear loudnorm
+ * Uses measured values from first pass to apply constant gain (no pumping)
+ */
+export function buildSecondPassChain(preFilters: string[], measured: LoudnormMeasured): string {
+  const filters = [...preFilters];
+
+  // Loudnorm in linear mode - applies constant gain based on measured values
+  // This eliminates the pumping artifact caused by dynamic gain adjustment
+  filters.push(
+    `loudnorm=I=-9:TP=-1.0:LRA=5:` +
+    `measured_I=${measured.input_i}:` +
+    `measured_TP=${measured.input_tp}:` +
+    `measured_LRA=${measured.input_lra}:` +
+    `measured_thresh=${measured.input_thresh}:` +
+    `offset=${measured.target_offset}:` +
+    `linear=true:print_format=summary`
+  );
 
   // Aggressive true-peak limiter @ -0.6 dBTP (limit=0.93 ≈ -0.63 dB)
   // This ensures no inter-sample peaks exceed -0.5 dBTP
+  filters.push('alimiter=limit=0.93:attack=0.5:release=20:level=false');
+
+  return filters.join(',');
+}
+
+/**
+ * Parse loudnorm JSON output to extract measured values
+ */
+export function parseLoudnormMeasured(stderr: string): LoudnormMeasured | null {
+  try {
+    // Find the JSON block in stderr (loudnorm outputs JSON between braces)
+    const jsonMatch = stderr.match(/\{[\s\S]*"input_i"[\s\S]*"target_offset"[\s\S]*\}/);
+    if (!jsonMatch) {
+      return null;
+    }
+
+    const data = JSON.parse(jsonMatch[0]);
+
+    return {
+      input_i: parseFloat(data.input_i),
+      input_tp: parseFloat(data.input_tp),
+      input_lra: parseFloat(data.input_lra),
+      input_thresh: parseFloat(data.input_thresh),
+      target_offset: parseFloat(data.target_offset),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build the mastering filter chain based on analysis (legacy single-pass, kept for reference)
+ * @deprecated Use two-pass processing with buildFirstPassChain/buildSecondPassChain instead
+ */
+export function buildMasteringFilterChain(analysis: MasteringAnalysis): {
+  filterChain: string;
+  compressionEnabled: boolean;
+  saturationEnabled: boolean;
+} {
+  const { filters, compressionEnabled, saturationEnabled } = buildPreLoudnormChain(analysis);
+
+  // Single-pass loudnorm (causes pumping - deprecated)
+  filters.push('loudnorm=I=-9:TP=-1.0:LRA=5:print_format=summary');
   filters.push('alimiter=limit=0.93:attack=0.5:release=20:level=false');
 
   return {
@@ -350,7 +433,7 @@ function getCodecArgs(format: string): string[] {
 }
 
 /**
- * Run the mastering process (single-pass, outputs directly to target format)
+ * Run the mastering process (two-pass for linear loudnorm, eliminates pumping)
  */
 export async function runMasteringProcess(
   inputPath: string,
@@ -364,7 +447,7 @@ export async function runMasteringProcess(
   try {
     // Stage 1: Analysis
     callbacks?.onStage?.('Analyzing audio dynamics...');
-    callbacks?.onProgress?.(10);
+    callbacks?.onProgress?.(5);
 
     const inputAnalysis = await analyzeLoudnessForMastering(inputPath);
     if (!inputAnalysis) {
@@ -373,43 +456,74 @@ export async function runMasteringProcess(
 
     log.info({ inputAnalysis }, 'Input analysis complete');
 
-    // Stage 2: Build filter chain
+    // Stage 2: Build pre-loudnorm chain
     callbacks?.onStage?.('Building mastering chain...');
-    callbacks?.onProgress?.(20);
+    callbacks?.onProgress?.(10);
 
-    const { filterChain, compressionEnabled, saturationEnabled } = buildMasteringFilterChain(inputAnalysis);
+    const { filters: preFilters, compressionEnabled, saturationEnabled } = buildPreLoudnormChain(inputAnalysis);
 
     log.info({
-      filterChain,
+      preFilters,
       compressionEnabled,
       saturationEnabled
-    }, 'Filter chain built');
+    }, 'Pre-loudnorm chain built');
 
-    // Stage 3: Process (single-pass to target format)
-    callbacks?.onStage?.('Applying mastering chain...');
-    callbacks?.onProgress?.(30);
+    // Stage 3: First pass - measure loudness through the processing chain
+    callbacks?.onStage?.('Measuring loudness (pass 1)...');
+    callbacks?.onProgress?.(15);
+
+    const firstPassChain = buildFirstPassChain(preFilters);
+
+    const { stderr: firstPassStderr, exitCode: firstPassExit } = await runFFmpeg([
+      '-i', inputPath,
+      '-af', firstPassChain,
+      '-f', 'null',
+      '-'
+    ]);
+
+    if (firstPassExit !== 0) {
+      log.error({ exitCode: firstPassExit, stderr: firstPassStderr }, 'First pass failed');
+      return { success: false, error: `Loudness measurement failed: ${firstPassStderr.slice(0, 500)}` };
+    }
+
+    // Parse measured values from first pass
+    const measured = parseLoudnormMeasured(firstPassStderr);
+    if (!measured) {
+      log.error({ stderr: firstPassStderr.slice(-1000) }, 'Failed to parse loudnorm measurements');
+      return { success: false, error: 'Failed to parse loudness measurements from first pass' };
+    }
+
+    log.info({ measured }, 'Loudnorm measurements extracted');
+
+    callbacks?.onProgress?.(40);
+
+    // Stage 4: Second pass - apply linear loudnorm with measured values
+    callbacks?.onStage?.('Applying mastering (pass 2)...');
+    callbacks?.onProgress?.(45);
+
+    const secondPassChain = buildSecondPassChain(preFilters, measured);
 
     // Determine output format and get codec args
     const format = outputFormat || outputPath.split('.').pop()?.toLowerCase() || 'wav';
     const codecArgs = getCodecArgs(format);
 
-    const { stderr, exitCode } = await runFFmpeg([
+    const { stderr: secondPassStderr, exitCode: secondPassExit } = await runFFmpeg([
       '-i', inputPath,
-      '-af', filterChain,
+      '-af', secondPassChain,
       '-ar', '48000',           // Output at 48kHz
       ...codecArgs,             // Format-specific codec args
       '-y',
       outputPath
     ]);
 
-    if (exitCode !== 0) {
-      log.error({ exitCode, stderr }, 'Mastering process failed');
-      return { success: false, error: `Mastering failed: ${stderr.slice(0, 500)}` };
+    if (secondPassExit !== 0) {
+      log.error({ exitCode: secondPassExit, stderr: secondPassStderr }, 'Second pass failed');
+      return { success: false, error: `Mastering failed: ${secondPassStderr.slice(0, 500)}` };
     }
 
     callbacks?.onProgress?.(80);
 
-    // Stage 4: Post-master QC
+    // Stage 5: Post-master QC
     callbacks?.onStage?.('Verifying output...');
     callbacks?.onProgress?.(90);
 
@@ -431,7 +545,7 @@ export async function runMasteringProcess(
     callbacks?.onProgress?.(100);
     const duration = Date.now() - startTime;
 
-    log.info({ duration }, 'Mastering complete');
+    log.info({ duration, twoPass: true }, 'Mastering complete');
 
     return {
       success: true,
@@ -439,7 +553,7 @@ export async function runMasteringProcess(
       duration,
       inputAnalysis,
       outputAnalysis: outputAnalysis ?? undefined,
-      filterChain,
+      filterChain: secondPassChain,
       decisions: {
         compressionEnabled,
         saturationEnabled
