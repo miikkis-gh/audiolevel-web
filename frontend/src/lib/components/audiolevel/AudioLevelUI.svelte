@@ -1047,7 +1047,7 @@
     font-size: 13px;
     letter-spacing: 2px;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.16);
+    color: rgba(255, 255, 255, 0.28);
     user-select: none;
     z-index: 5;
   }
@@ -1144,7 +1144,7 @@
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 300;
     font-size: 9px;
-    color: rgba(255, 255, 255, 0.24);
+    color: rgba(255, 255, 255, 0.38);
     text-align: center;
     margin-top: 5px;
     white-space: nowrap;
@@ -1156,7 +1156,7 @@
     font-family: 'Outfit', sans-serif;
     font-weight: 300;
     font-size: 17px;
-    color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.55);
     text-align: center;
     letter-spacing: 0.5px;
     animation: fadeUp 0.5s ease-out;
@@ -1168,7 +1168,7 @@
     font-weight: 300;
     font-size: 13px;
     line-height: 1.8;
-    color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.35);
     text-align: center;
     animation: fadeUp 0.6s ease-out 0.1s both;
   }
@@ -1177,7 +1177,7 @@
     display: block;
     margin-top: 8px;
     font-size: 11px;
-    color: rgba(80, 210, 180, 0.25);
+    color: rgba(80, 210, 180, 0.4);
   }
 
   .progress-num {
@@ -1198,7 +1198,7 @@
     font-size: 11px;
     letter-spacing: 1.5px;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.4);
     text-align: center;
     margin-top: 6px;
     min-height: 16px;
@@ -1213,7 +1213,7 @@
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 300;
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.48);
     margin-bottom: 16px;
     letter-spacing: 0.3px;
   }
@@ -1373,7 +1373,7 @@
   }
 
   .rt-icon {
-    color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.35);
     transition: color 0.3s ease;
   }
 
@@ -1424,13 +1424,13 @@
     height: 28px;
     border-radius: 50%;
     border: none;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.08);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: background 0.2s ease;
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.45);
   }
 
   .report-close:hover {
@@ -1504,8 +1504,8 @@
     justify-content: center;
     gap: 16px;
     padding: 10px 20px;
-    background: rgba(10, 10, 18, 0.85);
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(10, 10, 18, 0.88);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(12px);
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
@@ -1519,27 +1519,27 @@
   }
 
   .status-label {
-    color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.5);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
 
   .status-value {
-    color: rgba(80, 210, 180, 0.7);
+    color: rgba(80, 210, 180, 0.85);
     font-weight: 500;
   }
 
   .status-value.warning {
-    color: rgba(255, 180, 80, 0.8);
+    color: rgba(255, 180, 80, 0.9);
   }
 
   .status-value.critical {
-    color: rgba(255, 100, 100, 0.8);
+    color: rgba(255, 100, 100, 0.9);
   }
 
   .status-divider {
     width: 1px;
     height: 12px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.15);
   }
 </style>
