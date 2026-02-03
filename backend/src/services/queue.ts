@@ -48,7 +48,7 @@ export interface AudioJobResult {
   error?: string;
   duration?: number;
   // Mastering pipeline metadata
-  processingType?: 'ffmpeg-normalize' | 'mastering-pipeline';
+  processingType?: 'ffmpeg-normalize' | 'mastering-pipeline' | 'direct-copy';
   masteringDecisions?: {
     compressionEnabled: boolean;
     saturationEnabled: boolean;
