@@ -31,7 +31,7 @@ upload.get('/rate-limit', async (c) => {
     remaining: status.remaining,
     used: status.count,
     resetAt: status.resetAt,
-    windowMs: 60 * 60 * 1000,
+    windowMs: 15 * 60 * 1000,
   });
 });
 

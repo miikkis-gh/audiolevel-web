@@ -12,7 +12,7 @@ export interface RateLimitOptions extends Partial<RateLimitConfig> {
 
 const DEFAULT_OPTIONS: RateLimitOptions = {
   maxRequests: 10,
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: 15 * 60 * 1000, // 15 minutes
   message: 'Too many requests, please try again later',
   statusCode: 429,
   headers: true,
@@ -85,9 +85,9 @@ export function rateLimitMiddleware(options: RateLimitOptions = {}) {
  */
 export const uploadRateLimiter = rateLimitMiddleware({
   maxRequests: 10,
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: 15 * 60 * 1000, // 15 minutes
   keyPrefix: 'ratelimit:upload:',
-  message: 'Upload limit exceeded. You can upload 10 files per hour.',
+  message: 'Upload limit exceeded. You can upload 10 files per 15 minutes.',
 });
 
 /**
