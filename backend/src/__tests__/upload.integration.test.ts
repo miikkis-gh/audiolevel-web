@@ -6,9 +6,9 @@ mock.module('../services/queue', () => ({
   addAudioJob: async () => ({ id: 'testjob12345' }),
   getJobStatus: async (jobId: string) => {
     if (jobId === 'notfound1234') return null;
-    if (jobId === 'completed1234') {
+    if (jobId === 'complete1234') {
       return {
-        id: 'completed1234',
+        id: 'complete1234',
         state: 'completed',
         progress: 100,
         data: { originalName: 'test.mp3', preset: 'podcast' },
@@ -152,7 +152,7 @@ describe('Upload API', () => {
     });
 
     test('returns completed job with result', async () => {
-      const res = await app.request('/api/upload/job/completed1234');
+      const res = await app.request('/api/upload/job/complete1234');
       expect(res.status).toBe(200);
 
       const body = await res.json();
