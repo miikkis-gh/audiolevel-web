@@ -121,7 +121,8 @@ test.describe('Batch Upload', () => {
 test.describe('Batch Download', () => {
   test('API returns job status correctly', async ({ page }) => {
     // Test the API endpoint directly
-    const response = await page.request.get('/api/upload/job/test-nonexistent');
+    // Job ID must be exactly 12 alphanumeric characters (nanoid format)
+    const response = await page.request.get('/api/upload/job/nonexist1234');
 
     // Should return 404 for non-existent job
     expect(response.status()).toBe(404);
