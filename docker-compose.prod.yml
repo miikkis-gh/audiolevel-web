@@ -34,6 +34,8 @@ services:
       - MAX_CONCURRENT_JOBS=4
       - PROCESSING_TIMEOUT_MS=300000
       - LOG_LEVEL=info
+      - VISQOL_PATH=/usr/local/bin/visqol
+      - VISQOL_MODEL_PATH=/usr/local/visqol/model/lattice_tcditugenmeetpackhref_ls2_nl60_lr12_bs2048_learn.005_ep2400_train1_7_raw.tflite
     volumes:
       - uploads-data:/app/uploads
       - outputs-data:/app/outputs
