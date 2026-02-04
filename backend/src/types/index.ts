@@ -99,3 +99,10 @@ export type {
   EvaluationConfig,
   ScoringWeights,
 } from './evaluation';
+
+// Intelligent processing types
+export type {
+  IntelligentProcessingResult,
+  ProcessingReport,
+  IntelligentProcessingCallbacks,
+} from '../services/intelligentProcessor';
