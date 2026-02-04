@@ -44,6 +44,55 @@ This ruled out heavy ML approaches (inaSpeechSegmenter, DeepFilterNet) in favor 
 - FFmpeg filters for all processing
 - ViSQOL for perceptual quality (CPU-based)
 
+### Research Findings
+
+Web research was conducted to validate design decisions against professional audio engineering practices:
+
+#### Processing Chain Order
+**Sources**: iZotope, Sound on Sound
+
+The correct order matters because each stage affects what follows:
+1. **Cleanup first** (DC offset, high-pass) — remove problems before amplifying them
+2. **Noise reduction before compression** — compression raises noise floor if done after
+3. **Corrective EQ before compression** — fix frequency problems before dynamics processing
+4. **De-essing before compression** — compressors can emphasize sibilance
+5. **Leveling/compression** — shape dynamics after fixing problems
+6. **Loudness normalization last** — always final step, single limiter only
+
+#### Music Compression Concerns
+**Sources**: Mastering The Mix, Waves, Just Mastering, Sage Audio
+
+Key finding: **Most music does NOT need compression** during mastering/normalization:
+- Modern music is already compressed during mixing
+- Adding more compression causes "pumping" and artifacts
+- "Less is more" philosophy — mastering engineers often do minimal processing
+- Only compress if LRA > 20 (genuinely excessive dynamic range)
+- If compression needed: gentle settings only (1.5:1 ratio, 50ms attack, 500ms release)
+- Maximum 1-2 dB gain reduction to avoid audible artifacts
+- Let `loudnorm` handle loudness — that's its job, don't pre-compress
+
+This research directly influenced:
+- Music candidates use minimal/no compression
+- `dynaudnorm` used for speech (designed for voice leveling without pumping)
+- `acompressor` only for music with LRA > 20, with gentle settings
+- Conservative candidate preferred on ties ("less is more")
+
+#### Speech Processing
+**Sources**: MulderSoft (dynaudnorm documentation)
+
+Key finding: `dynaudnorm` is specifically designed for speech:
+- Frame-based normalization avoids pumping
+- Preserves natural speech dynamics
+- Better than traditional compression for voice content
+
+#### Perceptual Quality Measurement
+**Sources**: Google ViSQOL documentation
+
+Key finding: ViSQOL provides MOS (Mean Opinion Score) that correlates with human perception:
+- Score 1-5 scale (5 = excellent quality)
+- Used as **degradation detector** (reject if < 3.0), not primary ranking metric
+- Helps catch processing artifacts that technical metrics miss
+
 ---
 
 ## Architecture Overview
