@@ -71,8 +71,8 @@ async function processAudioJob(
           type: mapContentTypeToProfile(result.analysis.contentType.type),
           label: formatContentTypeLabel(result.analysis.contentType.type),
           confidence: mapConfidence(result.analysis.contentType.confidence),
-          targetLufs: result.analysis.contentType.type === 'music' ? -14 : -16,
-          targetTruePeak: result.analysis.contentType.type === 'music' ? -1 : -1.5,
+          targetLufs: getTargetLufs(result.analysis.contentType.type),
+          targetTruePeak: getTargetTruePeak(result.analysis.contentType.type),
           standard: getStandardForContentType(result.analysis.contentType.type),
           reasons: result.analysis.contentType.signals.map(s => ({
             signal: s.name,
@@ -150,6 +150,24 @@ function getStandardForContentType(contentType: string): string {
     'unknown': 'Streaming (Spotify / Apple Music / YouTube)',
   };
   return map[contentType] || 'Streaming';
+}
+
+/**
+ * Get target LUFS for content type
+ * Speech/podcast: -16 LUFS, Music/unknown: -14 LUFS
+ */
+function getTargetLufs(contentType: string): number {
+  const speechTypes = ['speech', 'podcast_mixed'];
+  return speechTypes.includes(contentType) ? -16 : -14;
+}
+
+/**
+ * Get target true peak for content type
+ * Speech/podcast: -1.5 dBTP, Music/unknown: -1 dBTP
+ */
+function getTargetTruePeak(contentType: string): number {
+  const speechTypes = ['speech', 'podcast_mixed'];
+  return speechTypes.includes(contentType) ? -1.5 : -1;
 }
 
 /**

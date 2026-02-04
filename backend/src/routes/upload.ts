@@ -192,6 +192,7 @@ upload.get('/job/:id', async (c) => {
       inputAnalysis: status.result.inputAnalysis,
       outputAnalysis: status.result.outputAnalysis,
       detectedProfile: status.result.detectedProfile,
+      processingReport: status.result.processingReport,
     } : undefined,
     error: status.failedReason,
   });

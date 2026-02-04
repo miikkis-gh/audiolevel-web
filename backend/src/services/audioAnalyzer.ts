@@ -396,60 +396,66 @@ async function getSoxMetrics(inputPath: string): Promise<{
 
 /**
  * Classify content type based on metrics
+ *
+ * Key insight: silence ratio is the most reliable differentiator.
+ * - Music: continuous audio with minimal gaps (silenceRatio < 5%)
+ * - Speech: natural pauses between phrases (silenceRatio > 15%)
+ *
+ * Compressed music (EDM, pop) has low LRA but shouldn't be classified as speech.
+ * Low spectral centroid can be bass-heavy music (dub, electronic, hip-hop).
  */
 function classifyContent(metrics: AnalysisMetrics): ContentClassification {
   const signals: ContentSignal[] = [];
   let speechScore = 0;
   let musicScore = 0;
 
-  // Silence ratio: high = speech (pauses between phrases)
-  if (metrics.silenceRatio > 0.15) {
-    speechScore += 0.3;
+  // Silence ratio: THE most reliable differentiator (high weight)
+  // Music fills the space, speech has natural pauses
+  if (metrics.silenceRatio > 0.20) {
+    speechScore += 0.4;
     signals.push({
       name: 'High silence ratio',
       value: metrics.silenceRatio,
       indicates: 'speech',
-      weight: 0.3,
+      weight: 0.4,
     });
-  } else if (metrics.silenceRatio < 0.05) {
-    musicScore += 0.3;
+  } else if (metrics.silenceRatio > 0.10) {
+    speechScore += 0.2;
+    signals.push({
+      name: 'Moderate silence ratio',
+      value: metrics.silenceRatio,
+      indicates: 'speech',
+      weight: 0.2,
+    });
+  } else if (metrics.silenceRatio < 0.03) {
+    musicScore += 0.4;
+    signals.push({
+      name: 'Very low silence ratio',
+      value: metrics.silenceRatio,
+      indicates: 'music',
+      weight: 0.4,
+    });
+  } else if (metrics.silenceRatio < 0.08) {
+    musicScore += 0.25;
     signals.push({
       name: 'Low silence ratio',
       value: metrics.silenceRatio,
       indicates: 'music',
-      weight: 0.3,
-    });
-  }
-
-  // Crest factor: high = music (more dynamic), low = compressed speech
-  if (metrics.crestFactor > 15) {
-    musicScore += 0.2;
-    signals.push({
-      name: 'High crest factor',
-      value: metrics.crestFactor,
-      indicates: 'music',
-      weight: 0.2,
-    });
-  } else if (metrics.crestFactor < 10) {
-    speechScore += 0.1;
-    signals.push({
-      name: 'Low crest factor',
-      value: metrics.crestFactor,
-      indicates: 'speech',
-      weight: 0.1,
+      weight: 0.25,
     });
   }
 
   // Spectral flatness: high = noise-like (speech), low = tonal (music)
-  if (metrics.spectralFlatness > 0.5) {
-    speechScore += 0.2;
+  // This is reliable - music has harmonic structure, speech is more noise-like
+  if (metrics.spectralFlatness > 0.6) {
+    speechScore += 0.25;
     signals.push({
       name: 'High spectral flatness',
       value: metrics.spectralFlatness,
       indicates: 'speech',
-      weight: 0.2,
+      weight: 0.25,
     });
-  } else if (metrics.spectralFlatness < 0.3) {
+  } else if (metrics.spectralFlatness < 0.25) {
     musicScore += 0.3;
     signals.push({
       name: 'Low spectral flatness',
@@ -459,35 +465,42 @@ function classifyContent(metrics: AnalysisMetrics): ContentClassification {
     });
   }
 
-  // Loudness range (LRA): high = dynamic content
+  // Crest factor: very high = dynamic music, but low doesn't mean speech
+  // Compressed music also has low crest factor
+  if (metrics.crestFactor > 18) {
+    musicScore += 0.15;
+    signals.push({
+      name: 'High crest factor',
+      value: metrics.crestFactor,
+      indicates: 'music',
+      weight: 0.15,
+    });
+  }
+
+  // Loudness range: Only use as speech indicator if also has high silence
+  // Compressed music has low LRA but low silence ratio too
   if (metrics.loudnessRange > 15) {
-    musicScore += 0.2;
+    musicScore += 0.15;
     signals.push({
       name: 'Wide loudness range',
       value: metrics.loudnessRange,
       indicates: 'music',
-      weight: 0.2,
+      weight: 0.15,
     });
-  } else if (metrics.loudnessRange < 8) {
-    speechScore += 0.2;
+  } else if (metrics.loudnessRange < 6 && metrics.silenceRatio > 0.10) {
+    // Only count as speech if there's also significant silence
+    speechScore += 0.15;
     signals.push({
-      name: 'Narrow loudness range',
+      name: 'Narrow loudness range with pauses',
       value: metrics.loudnessRange,
       indicates: 'speech',
-      weight: 0.2,
+      weight: 0.15,
     });
   }
 
-  // Spectral centroid: voice range vs wider
-  if (metrics.spectralCentroid < 2500 && metrics.spectralCentroid > 500) {
-    speechScore += 0.2;
-    signals.push({
-      name: 'Voice-range spectral centroid',
-      value: metrics.spectralCentroid,
-      indicates: 'speech',
-      weight: 0.2,
-    });
-  } else if (metrics.spectralCentroid > 3000) {
+  // Spectral centroid: Only strong indicator at extremes
+  // 500-2500 Hz is too broad - covers lots of music too
+  if (metrics.spectralCentroid > 4000) {
     musicScore += 0.1;
     signals.push({
       name: 'High spectral centroid',
@@ -495,24 +508,49 @@ function classifyContent(metrics: AnalysisMetrics): ContentClassification {
       indicates: 'music',
       weight: 0.1,
     });
+  } else if (metrics.spectralCentroid < 1500 && metrics.spectralCentroid > 300 && metrics.silenceRatio > 0.12) {
+    // Voice-range centroid only counts with moderate silence
+    speechScore += 0.15;
+    signals.push({
+      name: 'Voice-range spectral centroid',
+      value: metrics.spectralCentroid,
+      indicates: 'speech',
+      weight: 0.15,
+    });
   }
 
-  // Determine type
+  // Determine type - relaxed thresholds, prefer the higher score
   let type: ContentType;
   let confidence: number;
 
-  if (speechScore > 0.6 && speechScore > musicScore + 0.2) {
+  const scoreDiff = Math.abs(musicScore - speechScore);
+  const maxScore = Math.max(musicScore, speechScore);
+
+  if (speechScore > 0.5 && speechScore > musicScore + 0.15) {
     type = 'speech';
-    confidence = Math.min(speechScore, 1);
-  } else if (musicScore > 0.6 && musicScore > speechScore + 0.2) {
+    confidence = Math.min(0.5 + scoreDiff, 1);
+  } else if (musicScore > 0.5 && musicScore > speechScore + 0.15) {
     type = 'music';
-    confidence = Math.min(musicScore, 1);
-  } else if (speechScore > 0.3 && musicScore > 0.3) {
+    confidence = Math.min(0.5 + scoreDiff, 1);
+  } else if (maxScore > 0.3) {
+    // If one score is clearly higher, use it even if below 0.5
+    if (musicScore > speechScore) {
+      type = 'music';
+      confidence = 0.5 + scoreDiff * 0.5;
+    } else if (speechScore > musicScore) {
+      type = 'speech';
+      confidence = 0.5 + scoreDiff * 0.5;
+    } else {
+      type = 'podcast_mixed';
+      confidence = 0.5;
+    }
+  } else if (speechScore > 0.2 && musicScore > 0.2) {
     type = 'podcast_mixed';
-    confidence = 0.6;
-  } else {
-    type = 'unknown';
     confidence = 0.5;
+  } else {
+    // Default to music if truly ambiguous - safer for audio quality
+    type = 'music';
+    confidence = 0.4;
   }
 
   return { type, confidence, signals };
