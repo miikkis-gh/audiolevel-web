@@ -9,6 +9,43 @@ A hands-off audio processor that analyzes, detects problems, tries multiple proc
 
 ---
 
+## Design Decisions
+
+### Project Goal
+
+**Learning Project** — Transform AudioLevel into an intelligent audio processing suite to explore audio analysis, DSP, and automated decision-making. Priority is learning and experimentation over production-readiness.
+
+### Requirements Gathering
+
+The following choices were made during collaborative design:
+
+| Decision | Options Considered | Choice | Rationale |
+|----------|-------------------|--------|-----------|
+| **Feature Focus** | 1) Analysis & visualization, 2) Effects & DSP, 3) Format conversion, 4) Batch workflows | **1 and 2** | Core audio intelligence requires both analysis (to understand content) and DSP (to process it) |
+| **Architecture** | 1) Client-side only, 2) Server-side only, 3) Hybrid, 4) Microservices | **3 (Hybrid)** | Leverage existing backend infrastructure while keeping UI responsive |
+| **Processing Approach** | 1) Rule-based presets, 2) ML classification, 3) Detect→fix→normalize, 4) Iterative optimization | **3 and 4** | Detect problems first, then iterate through multiple approaches to find best result |
+| **Comparison Method** | 1) Before/after metrics, 2) Reference matching, 3) User preference learning, 4) A/B candidate testing | **4 (A/B testing)** | Generate multiple processing candidates, evaluate each, pick winner automatically |
+| **Quality Measurement** | 1) Technical metrics only, 2) Perceptual models, 3) ML quality scoring, 4) Hybrid | **2 (Perceptual)** | Use psychoacoustic models (ViSQOL) to evaluate quality as humans would hear it |
+| **UI Complexity** | 1) Full control panel, 2) Guided wizard, 3) Minimal with presets, 4) Simple with optional detail | **4 (Optional detail)** | Keep existing simple UI, add collapsible sections for those who want to see what happened |
+
+### Key User Requirements
+
+1. **Completely hands-off**: User drops files, system makes all decisions automatically
+2. **No configuration needed**: Program analyzes and determines best processing for each file
+3. **Transparency on demand**: Simple by default, but show problems found and approaches tested if user wants details
+4. **Professional results**: Follow industry standards for loudness, limiting, and processing chain order
+
+### Server Constraints
+
+Target deployment: **4 vCPU, 8GB RAM, No GPU**
+
+This ruled out heavy ML approaches (inaSpeechSegmenter, DeepFilterNet) in favor of:
+- FFmpeg/SoX heuristics for content classification
+- FFmpeg filters for all processing
+- ViSQOL for perceptual quality (CPU-based)
+
+---
+
 ## Architecture Overview
 
 ```
