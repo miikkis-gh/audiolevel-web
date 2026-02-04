@@ -199,6 +199,7 @@
       target: single.target,
       standard: single.standard,
       notes: single.notes,
+      intelligentProcessing: single.intelligentProcessing,
     };
   }
 

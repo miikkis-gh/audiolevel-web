@@ -26,6 +26,9 @@
   let currentFile = $derived(files[currentIndex]);
   let report = $derived(currentFile?.report);
   let css = $derived(report ? profileCSS(report.type) : null);
+  let approachesExpanded = $state(false);
+
+  const hasIntelligentProcessing = $derived(!!report?.intelligentProcessing);
 </script>
 
 {#if currentFile && report && css}
@@ -104,6 +107,74 @@
       </div>
     </div>
   {/each}
+
+  {#if hasIntelligentProcessing && report.intelligentProcessing}
+    {@const ip = report.intelligentProcessing}
+
+    {#if ip.problemsDetected.length > 0}
+      <div class="report-divider"></div>
+      <div class="report-section-title">Problems Found</div>
+      {#each ip.problemsDetected as problem, i (i)}
+        <div class="problem-item">
+          <span class="problem-indicator" class:severity-mild={problem.severity === 'mild'} class:severity-moderate={problem.severity === 'moderate'} class:severity-severe={problem.severity === 'severe'}></span>
+          <div>
+            <span class="problem-name">{problem.problem}</span>
+            <span class="problem-details"> — {problem.details}</span>
+          </div>
+        </div>
+      {/each}
+    {/if}
+
+    {#if ip.processingApplied.length > 0}
+      <div class="report-divider"></div>
+      <div class="report-section-title">Processing Applied</div>
+      {#each ip.processingApplied as step, i (i)}
+        <div class="processing-step">
+          <span class="step-number">{i + 1}</span>
+          <span class="step-name">{step}</span>
+        </div>
+      {/each}
+    {/if}
+
+    {#if ip.candidatesTested.length > 0}
+      <div class="report-divider"></div>
+      <button class="approaches-toggle" onclick={() => approachesExpanded = !approachesExpanded}>
+        <span class="report-section-title" style="margin: 0;">Approaches Tested</span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="toggle-chevron"
+          class:expanded={approachesExpanded}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {#if approachesExpanded}
+        <div class="candidates-list">
+          {#each ip.candidatesTested as candidate, i (i)}
+            <div class="candidate-item" class:is-winner={candidate.isWinner}>
+              <span class="candidate-name">
+                {candidate.name}
+                {#if candidate.isWinner}
+                  <span class="winner-badge">✓</span>
+                {/if}
+              </span>
+              <span class="candidate-score">Score: {candidate.score}</span>
+            </div>
+          {/each}
+          {#if ip.winnerReason}
+            <div class="winner-reason">
+              <span class="reason-label">Why it won:</span> {ip.winnerReason}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    {/if}
+  {/if}
 
   <div class="report-divider"></div>
   <div class="report-section-title">Levels</div>
@@ -409,5 +480,158 @@
     100% {
       opacity: 0.2;
     }
+  }
+
+  /* Problems Found section */
+  .problem-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .problem-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-top: 6px;
+    flex-shrink: 0;
+    background: rgba(255, 180, 80, 0.6);
+  }
+
+  .problem-indicator.severity-mild {
+    background: rgba(255, 220, 100, 0.5);
+  }
+
+  .problem-indicator.severity-moderate {
+    background: rgba(255, 160, 60, 0.7);
+  }
+
+  .problem-indicator.severity-severe {
+    background: rgba(255, 100, 100, 0.8);
+  }
+
+  .problem-name {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .problem-details {
+    color: rgba(255, 255, 255, 0.25);
+  }
+
+  /* Processing Applied section */
+  .processing-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+  }
+
+  .step-number {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: rgba(80, 210, 180, 0.7);
+    background: rgba(80, 210, 180, 0.1);
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .step-name {
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  /* Approaches Tested section */
+  .approaches-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin-top: 0;
+  }
+
+  .approaches-toggle:hover .report-section-title {
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  .toggle-chevron {
+    color: rgba(255, 255, 255, 0.2);
+    transition: transform 0.2s ease;
+  }
+
+  .toggle-chevron.expanded {
+    transform: rotate(180deg);
+  }
+
+  .candidates-list {
+    margin-top: 12px;
+  }
+
+  .candidate-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 6px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+  }
+
+  .candidate-item.is-winner {
+    background: rgba(80, 210, 180, 0.08);
+    border: 1px solid rgba(80, 210, 180, 0.15);
+  }
+
+  .candidate-name {
+    color: rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .winner-badge {
+    color: rgba(80, 210, 180, 0.8);
+    font-size: 11px;
+  }
+
+  .candidate-score {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .winner-reason {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: rgba(80, 210, 180, 0.05);
+    border-radius: 6px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  .reason-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: rgba(80, 210, 180, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 </style>

@@ -11,6 +11,9 @@ const envSchema = z.object({
   PROCESSING_TIMEOUT_MS: z.coerce.number().default(300000), // 5 minutes
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   CORS_ORIGINS: z.string().default(''), // Comma-separated list of allowed origins
+  // ViSQOL configuration
+  VISQOL_PATH: z.string().default('visqol'), // Path to ViSQOL binary
+  VISQOL_MODEL_PATH: z.string().default('/usr/share/visqol/model/lattice_tcditugenmeetpackhref_ls2_nl60_lr12_bs2048_learn.005_ep2400_train1_7_raw.tflite'),
 });
 
 export type Env = z.infer<typeof envSchema>;

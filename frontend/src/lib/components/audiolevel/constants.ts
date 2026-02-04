@@ -52,6 +52,8 @@ export interface BatchReportData {
   target: string;
   standard: string;
   notes: string[];
+  // Optional intelligent processing data
+  intelligentProcessing?: IntelligentProcessingReport;
 }
 
 export interface BatchFile {

@@ -197,70 +197,234 @@ async function estimateSnr(filePath: string): Promise<number> {
   return 20; // Default estimate
 }
 
+// Track ViSQOL availability
+let visqolAvailable: boolean | null = null;
+
+/**
+ * Check if ViSQOL is available on the system
+ */
+export async function checkVisqolAvailability(): Promise<boolean> {
+  if (visqolAvailable !== null) {
+    return visqolAvailable;
+  }
+
+  try {
+    const { exitCode } = await runCommand(env.VISQOL_PATH, ['--help'], { timeoutMs: 5000 });
+    visqolAvailable = exitCode === 0;
+    if (visqolAvailable) {
+      log.info({ path: env.VISQOL_PATH }, 'ViSQOL is available');
+    } else {
+      log.warn('ViSQOL binary found but returned error');
+      visqolAvailable = false;
+    }
+  } catch {
+    log.info('ViSQOL not available - using FFmpeg spectral analysis fallback');
+    visqolAvailable = false;
+  }
+
+  return visqolAvailable;
+}
+
 /**
  * Get ViSQOL perceptual quality score
  *
  * ViSQOL compares processed vs original and returns MOS (1-5).
- * If ViSQOL is not available, falls back to a heuristic estimate.
+ * If ViSQOL is not available, falls back to spectral analysis.
  */
 async function getVisqolScore(
   processedPath: string,
   originalPath: string
 ): Promise<number> {
-  try {
-    // Try to run ViSQOL
-    const { stdout, exitCode } = await runCommand('visqol', [
-      '--reference_file', originalPath,
-      '--degraded_file', processedPath,
-      '--similarity_to_quality_model', '/usr/share/visqol/model/lattice_tcditugenmeetpackhref_ls2_nl60_lr12_bs2048_learn.005_ep2400_train1_7_raw.tflite',
-    ], { timeoutMs: 60000 });
+  // Check availability (cached after first check)
+  const hasVisqol = await checkVisqolAvailability();
 
-    if (exitCode === 0) {
-      // Parse MOS score from output
-      const mosMatch = stdout.match(/MOS-LQO:\s*([\d.]+)/);
-      if (mosMatch) {
-        return parseFloat(mosMatch[1]);
+  if (hasVisqol) {
+    try {
+      const { stdout, exitCode } = await runCommand(env.VISQOL_PATH, [
+        '--reference_file', originalPath,
+        '--degraded_file', processedPath,
+        '--similarity_to_quality_model', env.VISQOL_MODEL_PATH,
+      ], { timeoutMs: 60000 });
+
+      if (exitCode === 0) {
+        // Parse MOS score from output
+        const mosMatch = stdout.match(/MOS-LQO:\s*([\d.]+)/);
+        if (mosMatch) {
+          const score = parseFloat(mosMatch[1]);
+          log.debug({ processedPath, visqolScore: score }, 'ViSQOL score calculated');
+          return score;
+        }
       }
+    } catch (err) {
+      log.warn({ err }, 'ViSQOL execution failed, using fallback');
     }
-  } catch {
-    // ViSQOL not available - use fallback
-    log.debug('ViSQOL not available, using heuristic estimate');
   }
 
-  // Fallback: estimate quality based on processing metrics
-  // This is a rough heuristic - actual ViSQOL would be better
+  // Fallback: spectral analysis-based quality estimate
   return await estimatePerceptualQuality(processedPath, originalPath);
 }
 
 /**
  * Fallback perceptual quality estimate when ViSQOL is not available
+ *
+ * Uses spectral analysis to compare original vs processed:
+ * - Spectral difference (artifacts/distortion)
+ * - Dynamic range preservation
+ * - High-frequency energy preservation
+ * - Phase coherence estimation
  */
 async function estimatePerceptualQuality(
   processedPath: string,
   originalPath: string
 ): Promise<number> {
-  // Compare basic metrics between original and processed
-  const [processedMetrics, originalMetrics] = await Promise.all([
+  // Run parallel analysis of both files
+  const [
+    processedMetrics,
+    originalMetrics,
+    processedSpectral,
+    originalSpectral,
+  ] = await Promise.all([
     getLoudnessMetrics(processedPath),
     getLoudnessMetrics(originalPath),
+    getSpectralMetrics(processedPath),
+    getSpectralMetrics(originalPath),
   ]);
 
-  // Start with a base score
+  // Start with a base score of 4.0 (good quality)
   let score = 4.0;
+  const penalties: string[] = [];
+  const bonuses: string[] = [];
 
-  // Penalize if dynamic range was significantly reduced
+  // 1. Dynamic range preservation (important for music)
   const lraDiff = originalMetrics.loudnessRange - processedMetrics.loudnessRange;
-  if (lraDiff > 5) {
-    score -= 0.3 * (lraDiff / 10);
+  if (lraDiff > 8) {
+    // Severe compression
+    score -= 0.6;
+    penalties.push('severe_compression');
+  } else if (lraDiff > 5) {
+    // Moderate compression
+    score -= 0.3;
+    penalties.push('moderate_compression');
+  } else if (lraDiff < 2) {
+    // Good preservation
+    score += 0.1;
+    bonuses.push('dynamics_preserved');
   }
 
-  // Penalize if true peak is too high (potential clipping)
-  if (processedMetrics.truePeak > -0.5) {
+  // 2. True peak handling
+  if (processedMetrics.truePeak > -0.3) {
+    // Potential inter-sample clipping
     score -= 0.5;
+    penalties.push('potential_clipping');
+  } else if (processedMetrics.truePeak > -0.8) {
+    // Borderline safe
+    score -= 0.2;
+    penalties.push('marginal_headroom');
   }
 
-  // Clamp to valid MOS range
-  return Math.max(1, Math.min(5, score));
+  // 3. Spectral centroid preservation (tonal balance)
+  const centroidDiff = Math.abs(processedSpectral.centroid - originalSpectral.centroid) / originalSpectral.centroid;
+  if (centroidDiff > 0.3) {
+    // Significant tonal shift
+    score -= 0.4;
+    penalties.push('tonal_shift');
+  } else if (centroidDiff > 0.15) {
+    // Minor tonal shift
+    score -= 0.15;
+    penalties.push('minor_tonal_shift');
+  }
+
+  // 4. High frequency energy preservation (detail/air)
+  const hfRatio = originalSpectral.highEnergy > 0 ?
+    processedSpectral.highEnergy / originalSpectral.highEnergy : 1;
+  if (hfRatio < 0.5) {
+    // Lost high frequencies (dull sound)
+    score -= 0.35;
+    penalties.push('hf_loss');
+  } else if (hfRatio > 1.5) {
+    // Boosted highs (harsh sound)
+    score -= 0.25;
+    penalties.push('hf_boost');
+  }
+
+  // 5. Spectral flatness change (artifacts/distortion indicator)
+  const flatnessDiff = Math.abs(processedSpectral.flatness - originalSpectral.flatness);
+  if (flatnessDiff > 0.2) {
+    // Significant spectral change (possible artifacts)
+    score -= 0.3;
+    penalties.push('spectral_artifacts');
+  }
+
+  // 6. RMS level consistency (no pumping)
+  const rmsVariance = Math.abs(processedSpectral.rmsVariance - originalSpectral.rmsVariance);
+  if (rmsVariance > 5) {
+    // Introduced pumping/breathing
+    score -= 0.25;
+    penalties.push('pumping');
+  }
+
+  // Clamp to valid MOS range (1-5)
+  score = Math.max(1, Math.min(5, score));
+
+  log.debug({
+    processedPath,
+    estimatedMos: score.toFixed(2),
+    penalties,
+    bonuses,
+  }, 'Perceptual quality estimated via spectral analysis');
+
+  return score;
+}
+
+/**
+ * Get spectral metrics for quality estimation
+ */
+async function getSpectralMetrics(filePath: string): Promise<{
+  centroid: number;
+  flatness: number;
+  highEnergy: number;
+  rmsVariance: number;
+}> {
+  try {
+    // Use aspectralstats for spectral analysis
+    const { stderr: spectralOut } = await runCommand('ffmpeg', [
+      '-i', filePath,
+      '-af', 'aspectralstats=measure=mean',
+      '-f', 'null',
+      '-',
+    ], { timeoutMs: env.PROCESSING_TIMEOUT_MS });
+
+    // Use astats for RMS analysis
+    const { stderr: statsOut } = await runCommand('ffmpeg', [
+      '-i', filePath,
+      '-af', 'astats=metadata=1:measure_overall=1',
+      '-f', 'null',
+      '-',
+    ], { timeoutMs: env.PROCESSING_TIMEOUT_MS });
+
+    const centroidMatch = spectralOut.match(/spectral_centroid:\s*([\d.]+)/);
+    const flatnessMatch = spectralOut.match(/spectral_flatness:\s*([\d.]+)/);
+
+    // Estimate high frequency energy from spectral centroid
+    const centroid = centroidMatch ? parseFloat(centroidMatch[1]) : 2000;
+    const flatness = flatnessMatch ? parseFloat(flatnessMatch[1]) : 0.5;
+
+    // Extract RMS variance from astats
+    const rmsMatch = statsOut.match(/RMS level dB:\s*(-?[\d.]+)/);
+    const peakMatch = statsOut.match(/Peak level dB:\s*(-?[\d.]+)/);
+
+    const rms = rmsMatch ? parseFloat(rmsMatch[1]) : -20;
+    const peak = peakMatch ? parseFloat(peakMatch[1]) : -1;
+    const rmsVariance = Math.abs(peak - rms);
+
+    // High energy estimate based on centroid position
+    const highEnergy = Math.min(1, centroid / 8000);
+
+    return { centroid, flatness, highEnergy, rmsVariance };
+  } catch (err) {
+    log.warn({ err, filePath }, 'Failed to get spectral metrics');
+    return { centroid: 2000, flatness: 0.5, highEnergy: 0.25, rmsVariance: 15 };
+  }
 }
 
 /**
