@@ -30,29 +30,31 @@ describe('WebSocket Types', () => {
 
   describe('clientMessageSchema', () => {
     test('validates subscribe message', () => {
+      // Job ID must be exactly 12 alphanumeric characters (nanoid format)
       const result = clientMessageSchema.safeParse({
         type: 'subscribe',
-        jobId: 'job-123',
+        jobId: 'abc123def456',
       });
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.type).toBe('subscribe');
         if (result.data.type === 'subscribe') {
-          expect(result.data.jobId).toBe('job-123');
+          expect(result.data.jobId).toBe('abc123def456');
         }
       }
     });
 
     test('validates unsubscribe message', () => {
+      // Job ID must be exactly 12 alphanumeric characters (nanoid format)
       const result = clientMessageSchema.safeParse({
         type: 'unsubscribe',
-        jobId: 'job-456',
+        jobId: 'xyz789abc012',
       });
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.type).toBe('unsubscribe');
         if (result.data.type === 'unsubscribe') {
-          expect(result.data.jobId).toBe('job-456');
+          expect(result.data.jobId).toBe('xyz789abc012');
         }
       }
     });

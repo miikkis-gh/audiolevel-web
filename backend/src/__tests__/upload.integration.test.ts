@@ -1,13 +1,14 @@
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
 
 // Mock dependencies BEFORE importing the module that uses them
+// Note: Job IDs must be exactly 12 alphanumeric characters (nanoid format)
 mock.module('../services/queue', () => ({
-  addAudioJob: async () => ({ id: 'test-job' }),
+  addAudioJob: async () => ({ id: 'testjob12345' }),
   getJobStatus: async (jobId: string) => {
-    if (jobId === 'not-found') return null;
-    if (jobId === 'completed-job') {
+    if (jobId === 'notfound1234') return null;
+    if (jobId === 'completed1234') {
       return {
-        id: 'completed-job',
+        id: 'completed1234',
         state: 'completed',
         progress: 100,
         data: { originalName: 'test.mp3', preset: 'podcast' },
@@ -19,17 +20,17 @@ mock.module('../services/queue', () => ({
         },
       };
     }
-    if (jobId === 'active-job') {
+    if (jobId === 'activejob123') {
       return {
-        id: 'active-job',
+        id: 'activejob123',
         state: 'active',
         progress: 50,
         data: { originalName: 'test.mp3', preset: 'streaming' },
       };
     }
-    if (jobId === 'failed-job') {
+    if (jobId === 'failedjob123') {
       return {
-        id: 'failed-job',
+        id: 'failedjob123',
         state: 'failed',
         progress: 25,
         data: { originalName: 'test.mp3', preset: 'streaming' },
@@ -121,8 +122,9 @@ describe('Upload API', () => {
   });
 
   describe('GET /api/upload/job/:id', () => {
+    // Note: Job IDs must be exactly 12 alphanumeric characters (nanoid format)
     test('returns job status for valid job ID', async () => {
-      const res = await app.request('/api/upload/job/test-job-123');
+      const res = await app.request('/api/upload/job/testjob12345');
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -132,7 +134,7 @@ describe('Upload API', () => {
     });
 
     test('returns 404 for non-existent job', async () => {
-      const res = await app.request('/api/upload/job/not-found');
+      const res = await app.request('/api/upload/job/notfound1234');
       expect(res.status).toBe(404);
 
       const body = await res.json();
@@ -141,7 +143,7 @@ describe('Upload API', () => {
     });
 
     test('returns active job with progress', async () => {
-      const res = await app.request('/api/upload/job/active-job');
+      const res = await app.request('/api/upload/job/activejob123');
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -150,7 +152,7 @@ describe('Upload API', () => {
     });
 
     test('returns completed job with result', async () => {
-      const res = await app.request('/api/upload/job/completed-job');
+      const res = await app.request('/api/upload/job/completed1234');
       expect(res.status).toBe(200);
 
       const body = await res.json();
@@ -163,7 +165,7 @@ describe('Upload API', () => {
     });
 
     test('returns failed job with error reason', async () => {
-      const res = await app.request('/api/upload/job/failed-job');
+      const res = await app.request('/api/upload/job/failedjob123');
       expect(res.status).toBe(200);
 
       const body = await res.json();
