@@ -21,6 +21,16 @@ export interface ProgressMessage {
   stage?: string;
 }
 
+// Processing report from intelligent processor
+export interface ProcessingReportMessage {
+  contentType: string;
+  contentConfidence: number;
+  problemsDetected: { problem: string; details: string; severity?: string }[];
+  processingApplied: string[];
+  candidatesTested: { name: string; score: number; isWinner: boolean }[];
+  winnerReason: string;
+}
+
 export interface CompleteMessage {
   type: typeof WS_MESSAGE_TYPES.COMPLETE;
   jobId: string;
@@ -28,6 +38,7 @@ export interface CompleteMessage {
   duration?: number;
   inputLufs?: number;
   outputLufs?: number;
+  processingReport?: ProcessingReportMessage;
 }
 
 export interface ErrorMessage {
@@ -78,7 +89,12 @@ export const reconnectAttempts = writable<number>(0);
 export const jobProgress = writable<Map<string, { percent: number; stage?: string }>>(new Map());
 
 // Job results store: jobId -> completion/error info
-export const jobResults = writable<Map<string, { success: boolean; downloadUrl?: string; error?: string }>>(new Map());
+export const jobResults = writable<Map<string, {
+  success: boolean;
+  downloadUrl?: string;
+  error?: string;
+  processingReport?: ProcessingReportMessage;
+}>>(new Map());
 
 // Derived store for checking if connected
 export const isConnected = derived(connectionState, ($state) => $state === 'connected');
@@ -177,6 +193,7 @@ class WebSocketClient {
           map.set(message.jobId, {
             success: true,
             downloadUrl: message.downloadUrl,
+            processingReport: message.processingReport,
           });
           return new Map(map);
         });

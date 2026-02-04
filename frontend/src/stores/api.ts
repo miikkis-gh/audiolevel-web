@@ -28,12 +28,21 @@ export interface DetectedProfile {
   reasons: DetectionReason[];
 }
 
+export interface ProcessingReport {
+  contentType: string;
+  contentConfidence: number;
+  problemsDetected: { problem: string; details: string; severity?: string }[];
+  processingApplied: string[];
+  candidatesTested: { name: string; score: number; isWinner: boolean }[];
+  winnerReason: string;
+}
+
 export interface JobResult {
   success: boolean;
   outputPath?: string;
   error?: string;
   duration?: number;
-  processingType?: 'mastering' | 'normalization' | 'peak-normalization';
+  processingType?: 'mastering' | 'normalization' | 'peak-normalization' | 'intelligent';
   masteringDecisions?: {
     compressionEnabled: boolean;
     saturationEnabled: boolean;
@@ -42,6 +51,7 @@ export interface JobResult {
   inputAnalysis?: LoudnessAnalysis;
   outputAnalysis?: LoudnessAnalysis;
   detectedProfile?: DetectedProfile;
+  processingReport?: ProcessingReport;
 }
 
 export interface JobStatus {

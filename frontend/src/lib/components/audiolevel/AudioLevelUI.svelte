@@ -80,6 +80,11 @@
       standard: 'SFX / Sample library',
       target: 'Peak normalize to -1 dBFS',
     },
+    intelligent: {
+      displayName: 'Audio',
+      standard: 'Intelligent Processing',
+      target: 'Adaptive',
+    },
   };
 
   // Format number for display
@@ -102,6 +107,7 @@
   function buildReportFromResult(result: JobResult): SingleReportData {
     const profile = result.detectedProfile;
     const processingType = result.processingType || 'mastering';
+    const report = result.processingReport;
     const fallback = PROCESSING_FALLBACK[processingType] || PROCESSING_FALLBACK.mastering;
 
     // Use detected profile data if available, otherwise use fallback
@@ -148,6 +154,18 @@
       { signal: `Duration: ${result.duration ? `${(result.duration / 1000).toFixed(1)}s` : 'N/A'}`, detail: 'processing time' },
     ];
 
+    // Build intelligent processing report if available
+    const intelligentProcessing = report ? {
+      problemsDetected: report.problemsDetected.map(p => ({
+        problem: p.problem,
+        details: p.details,
+        severity: (p.severity as 'mild' | 'moderate' | 'severe') || undefined,
+      })),
+      processingApplied: report.processingApplied,
+      candidatesTested: report.candidatesTested,
+      winnerReason: report.winnerReason,
+    } : undefined;
+
     return {
       detectedAs: displayName,
       confidence,
@@ -165,6 +183,7 @@
       target,
       standard,
       notes,
+      intelligentProcessing,
     };
   }
 
