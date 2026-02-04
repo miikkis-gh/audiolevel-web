@@ -1,5 +1,6 @@
 import type { ServerWebSocket } from 'bun';
 import { logger, createChildLogger } from '../utils/logger';
+import { WEBSOCKET } from '../config/constants';
 import {
   clientMessageSchema,
   createPongMessage,
@@ -22,9 +23,10 @@ const connections = new Map<string, ServerWebSocket<WebSocketData>>();
 // Job subscriptions: jobId -> Set of sessionIds
 const jobSubscriptions = new Map<string, Set<string>>();
 
-// Heartbeat interval (30 seconds)
-const HEARTBEAT_INTERVAL = 30000;
-const HEARTBEAT_TIMEOUT = 60000;
+// Using constants from config
+const HEARTBEAT_INTERVAL = WEBSOCKET.HEARTBEAT_INTERVAL_MS;
+const HEARTBEAT_TIMEOUT = WEBSOCKET.HEARTBEAT_TIMEOUT_MS;
+const MAX_SUBSCRIPTIONS_PER_CONNECTION = WEBSOCKET.MAX_SUBSCRIPTIONS_PER_CONNECTION;
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -96,6 +98,13 @@ export function handleMessage(
 function handleSubscribe(ws: ServerWebSocket<WebSocketData>, jobId: string): void {
   const log = createChildLogger({ sessionId: ws.data.sessionId, jobId });
 
+  // Check subscription limit to prevent memory exhaustion
+  if (ws.data.subscribedJobs.size >= MAX_SUBSCRIPTIONS_PER_CONNECTION) {
+    log.warn({ currentCount: ws.data.subscribedJobs.size }, 'Subscription limit reached');
+    sendMessage(ws, createErrorMessage(jobId, 'Too many subscriptions', 'SUBSCRIPTION_LIMIT'));
+    return;
+  }
+
   // Add to client's subscribed jobs
   ws.data.subscribedJobs.add(jobId);
 
@@ -138,9 +147,11 @@ export function handleClose(ws: ServerWebSocket<WebSocketData>): void {
   const { sessionId, subscribedJobs } = ws.data;
 
   // Clean up all job subscriptions for this session
-  for (const jobId of subscribedJobs) {
+  // Use Array.from to avoid iterator invalidation issues
+  for (const jobId of Array.from(subscribedJobs)) {
     const subscribers = jobSubscriptions.get(jobId);
-    if (subscribers) {
+    // Safe null check to handle potential race conditions
+    if (subscribers?.size) {
       subscribers.delete(sessionId);
       if (subscribers.size === 0) {
         jobSubscriptions.delete(jobId);

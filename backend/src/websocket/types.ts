@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { JOB_ID } from '../config/constants';
 
 // WebSocket message types
 export const WS_MESSAGE_TYPES = {
@@ -19,12 +20,12 @@ export const WS_MESSAGE_TYPES = {
 // Client -> Server message schemas
 export const subscribeMessageSchema = z.object({
   type: z.literal(WS_MESSAGE_TYPES.SUBSCRIBE),
-  jobId: z.string().min(1),
+  jobId: z.string().regex(JOB_ID.REGEX, 'Invalid job ID format'),
 });
 
 export const unsubscribeMessageSchema = z.object({
   type: z.literal(WS_MESSAGE_TYPES.UNSUBSCRIBE),
-  jobId: z.string().min(1),
+  jobId: z.string().regex(JOB_ID.REGEX, 'Invalid job ID format'),
 });
 
 export const pingMessageSchema = z.object({

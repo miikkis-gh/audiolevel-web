@@ -31,7 +31,9 @@ async function cleanupDirectory(dirPath: string, maxAgeMinutes: number): Promise
 
       try {
         const stats = await stat(filePath);
-        const fileAge = now - stats.mtimeMs;
+        // Use creation time (birthtimeMs) when available, fall back to ctime then mtime
+        const fileTime = stats.birthtimeMs || stats.ctimeMs || stats.mtimeMs;
+        const fileAge = now - fileTime;
 
         if (fileAge > maxAgeMs) {
           await unlink(filePath);
@@ -74,7 +76,8 @@ export async function runCleanup(): Promise<{ uploads: number; outputs: number }
  * Filenames follow pattern: {jobId}-input.{ext} or {jobId}-output.{ext}
  */
 function extractJobIdFromFilename(filename: string): string | null {
-  const match = filename.match(/^([a-zA-Z0-9_-]+)-(input|output)\./);
+  // Match nanoid(12) format: exactly 12 alphanumeric/underscore/dash characters
+  const match = filename.match(/^([a-zA-Z0-9_-]{12})-(input|output)\./);
   return match ? match[1] : null;
 }
 
@@ -117,7 +120,9 @@ async function cleanupOrphanedFiles(dirPath: string): Promise<number> {
 
       try {
         const stats = await stat(filePath);
-        const fileAge = now - stats.mtimeMs;
+        // Use creation time when available for accurate age calculation
+        const fileTime = stats.birthtimeMs || stats.ctimeMs || stats.mtimeMs;
+        const fileAge = now - fileTime;
 
         // Only check files older than minimum age to avoid race conditions
         if (fileAge < ORPHAN_MIN_AGE_MS) continue;

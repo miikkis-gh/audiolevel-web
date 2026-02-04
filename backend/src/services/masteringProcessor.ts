@@ -4,9 +4,9 @@
  * Target: -9 LUFS, -0.5 dBTP (safe headroom)
  */
 
-import { spawn } from 'bun';
 import { logger, createChildLogger } from '../utils/logger';
 import { env } from '../config/env';
+import { runFFmpegCommand, runFFprobeCommand } from '../utils/ffmpeg';
 
 export interface MasteringAnalysis {
   integratedLufs: number;
@@ -55,148 +55,16 @@ export interface LoudnormMeasured {
   target_offset: number; // calculated offset
 }
 
-/**
- * Run FFmpeg command and capture output
- */
-async function runFFmpeg(
-  args: string[],
-  timeoutMs: number = env.PROCESSING_TIMEOUT_MS
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve, reject) => {
-    let stdout = '';
-    let stderr = '';
-    let killed = false;
+// Using shared runFFmpegCommand from utils/ffmpeg.ts
 
-    const proc = spawn({
-      cmd: ['ffmpeg', ...args],
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-
-    const timeout = setTimeout(() => {
-      killed = true;
-      proc.kill();
-      reject(new Error('FFmpeg timeout exceeded'));
-    }, timeoutMs);
-
-    // Read stdout
-    (async () => {
-      const reader = proc.stdout.getReader();
-      const decoder = new TextDecoder();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          stdout += decoder.decode(value);
-        }
-      } catch (e) {
-        if (!killed) logger.error({ err: e }, 'Error reading FFmpeg stdout');
-      }
-    })();
-
-    // Read stderr
-    (async () => {
-      const reader = proc.stderr.getReader();
-      const decoder = new TextDecoder();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          stderr += decoder.decode(value);
-        }
-      } catch (e) {
-        if (!killed) logger.error({ err: e }, 'Error reading FFmpeg stderr');
-      }
-    })();
-
-    proc.exited.then((exitCode) => {
-      clearTimeout(timeout);
-      if (!killed) {
-        resolve({ stdout, stderr, exitCode });
-      }
-    }).catch((err) => {
-      clearTimeout(timeout);
-      if (!killed) {
-        reject(err);
-      }
-    });
-  });
-}
-
-/**
- * Run FFprobe command and capture output
- */
-async function runFFprobe(
-  args: string[],
-  timeoutMs: number = 30000
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve, reject) => {
-    let stdout = '';
-    let stderr = '';
-    let killed = false;
-
-    const proc = spawn({
-      cmd: ['ffprobe', ...args],
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-
-    const timeout = setTimeout(() => {
-      killed = true;
-      proc.kill();
-      reject(new Error('FFprobe timeout exceeded'));
-    }, timeoutMs);
-
-    // Read stdout
-    (async () => {
-      const reader = proc.stdout.getReader();
-      const decoder = new TextDecoder();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          stdout += decoder.decode(value);
-        }
-      } catch (e) {
-        if (!killed) logger.error({ err: e }, 'Error reading FFprobe stdout');
-      }
-    })();
-
-    // Read stderr
-    (async () => {
-      const reader = proc.stderr.getReader();
-      const decoder = new TextDecoder();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          stderr += decoder.decode(value);
-        }
-      } catch (e) {
-        if (!killed) logger.error({ err: e }, 'Error reading FFprobe stderr');
-      }
-    })();
-
-    proc.exited.then((exitCode) => {
-      clearTimeout(timeout);
-      if (!killed) {
-        resolve({ stdout, stderr, exitCode });
-      }
-    }).catch((err) => {
-      clearTimeout(timeout);
-      if (!killed) {
-        reject(err);
-      }
-    });
-  });
-}
+// Using shared runFFprobeCommand from utils/ffmpeg.ts
 
 /**
  * Preflight check for input audio file
  */
 export async function preflightCheck(inputPath: string): Promise<PreflightResult> {
   try {
-    const { stdout, exitCode } = await runFFprobe([
+    const { stdout, exitCode } = await runFFprobeCommand([
       '-v', 'error',
       '-show_entries', 'stream=sample_rate,channels,bits_per_sample',
       '-of', 'json',
@@ -235,7 +103,7 @@ export async function analyzeLoudnessForMastering(inputPath: string): Promise<Ma
   const log = createChildLogger({ inputPath });
 
   try {
-    const { stderr, exitCode } = await runFFmpeg([
+    const { stderr, exitCode } = await runFFmpegCommand([
       '-i', inputPath,
       '-af', 'ebur128=peak=true,astats=metadata=1:measure_overall=1',
       '-f', 'null',
@@ -474,7 +342,7 @@ export async function runMasteringProcess(
 
     const firstPassChain = buildFirstPassChain(preFilters);
 
-    const { stderr: firstPassStderr, exitCode: firstPassExit } = await runFFmpeg([
+    const { stderr: firstPassStderr, exitCode: firstPassExit } = await runFFmpegCommand([
       '-i', inputPath,
       '-af', firstPassChain,
       '-f', 'null',
@@ -507,7 +375,7 @@ export async function runMasteringProcess(
     const format = outputFormat || outputPath.split('.').pop()?.toLowerCase() || 'wav';
     const codecArgs = getCodecArgs(format);
 
-    const { stderr: secondPassStderr, exitCode: secondPassExit } = await runFFmpeg([
+    const { stderr: secondPassStderr, exitCode: secondPassExit } = await runFFmpegCommand([
       '-i', inputPath,
       '-af', secondPassChain,
       '-ar', '48000',           // Output at 48kHz

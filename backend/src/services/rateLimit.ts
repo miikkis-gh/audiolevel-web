@@ -35,48 +35,59 @@ export async function checkRateLimit(
   const key = `${keyPrefix}${identifier}`;
   const now = Date.now();
   const windowStart = now - windowMs;
+  const requestId = `${now}-${Math.random().toString(36).substring(2, 9)}`;
+
+  // Lua script for atomic rate limiting (single round trip)
+  // Returns: [allowed (0/1), count, oldestTimestamp]
+  const luaScript = `
+    local key = KEYS[1]
+    local windowStart = tonumber(ARGV[1])
+    local now = tonumber(ARGV[2])
+    local maxRequests = tonumber(ARGV[3])
+    local windowMs = tonumber(ARGV[4])
+    local requestId = ARGV[5]
+
+    -- Remove expired entries
+    redis.call('zremrangebyscore', key, 0, windowStart)
+
+    -- Get current count
+    local count = redis.call('zcard', key)
+
+    -- Check if allowed
+    if count >= maxRequests then
+      -- Get oldest timestamp for retry-after calculation
+      local oldest = redis.call('zrange', key, 0, 0, 'WITHSCORES')
+      local oldestTs = oldest[2] or now
+      return {0, count, oldestTs}
+    end
+
+    -- Add this request and set expiration
+    redis.call('zadd', key, now, requestId)
+    redis.call('pexpire', key, windowMs)
+
+    return {1, count, 0}
+  `;
 
   try {
-    // Use Redis sorted set for sliding window rate limiting
-    // Score = timestamp, Member = unique request ID
-    const requestId = `${now}-${Math.random().toString(36).substring(2, 9)}`;
+    const result = await redis.eval(
+      luaScript,
+      1,
+      key,
+      windowStart,
+      now,
+      maxRequests,
+      windowMs,
+      requestId
+    ) as [number, number, number];
 
-    // Start a pipeline for atomic operations
-    const pipeline = redis.pipeline();
+    const [allowed, count, oldestTimestamp] = result;
 
-    // Remove expired entries (outside the window)
-    pipeline.zremrangebyscore(key, 0, windowStart);
-
-    // Count current requests in window
-    pipeline.zcard(key);
-
-    // Add this request (will be removed if not allowed)
-    pipeline.zadd(key, now, requestId);
-
-    // Set expiration on the key
-    pipeline.pexpire(key, windowMs);
-
-    const results = await pipeline.exec();
-
-    if (!results) {
-      throw new Error('Redis pipeline failed');
-    }
-
-    // Get the count before adding this request
-    const currentCount = (results[1][1] as number) || 0;
-
-    if (currentCount >= maxRequests) {
-      // Remove the request we just added since it's not allowed
-      await redis.zrem(key, requestId);
-
-      // Get the oldest request timestamp to calculate retry-after
-      const oldestRequests = await redis.zrange(key, 0, 0, 'WITHSCORES');
-      const oldestTimestamp = oldestRequests.length >= 2 ? parseInt(oldestRequests[1], 10) : now;
-      const resetAt = oldestTimestamp + windowMs;
+    if (!allowed) {
+      const resetAt = (oldestTimestamp || now) + windowMs;
       const retryAfter = Math.ceil((resetAt - now) / 1000);
 
       log.warn(
-        { currentCount, maxRequests, retryAfter },
+        { currentCount: count, maxRequests, retryAfter },
         'Rate limit exceeded'
       );
 
@@ -88,9 +99,8 @@ export async function checkRateLimit(
       };
     }
 
-    const remaining = maxRequests - currentCount - 1;
-
-    log.debug({ currentCount: currentCount + 1, remaining }, 'Rate limit check passed');
+    const remaining = maxRequests - count - 1;
+    log.debug({ currentCount: count + 1, remaining }, 'Rate limit check passed');
 
     return {
       allowed: true,
@@ -123,9 +133,13 @@ export async function getRateLimitStatus(
   const windowStart = now - windowMs;
 
   try {
-    // Remove expired and count
-    await redis.zremrangebyscore(key, 0, windowStart);
-    const count = await redis.zcard(key);
+    // Use pipeline for single round trip
+    const pipeline = redis.pipeline();
+    pipeline.zremrangebyscore(key, 0, windowStart);
+    pipeline.zcard(key);
+    const results = await pipeline.exec();
+
+    const count = (results?.[1]?.[1] as number) || 0;
 
     return {
       count,

@@ -225,10 +225,34 @@ export async function analyzeLoudness(inputPath: string): Promise<LoudnessAnalys
 }
 
 /**
- * Process audio file based on detected content profile
- * - Music (songs, mixes): Full mastering chain (highpass + compression + saturation + loudnorm + limiter)
- * - Speech (podcast, audiobook, voiceover): Simple normalization (25Hz highpass + loudnorm to profile LUFS)
- * - SFX (samples): Peak normalization
+ * Process audio file based on detected content profile.
+ *
+ * Automatically detects the audio content type and applies appropriate processing:
+ * - **Music** (songs, mixes): Full mastering chain with compression, saturation, and limiting
+ * - **Speech** (podcast, audiobook, voiceover): Simple loudness normalization to target LUFS
+ * - **SFX** (samples): Peak normalization only
+ *
+ * @param options - Input/output paths for processing
+ * @param callbacks - Optional callbacks for progress and stage updates
+ * @param filename - Original filename (helps with profile detection hints)
+ * @returns Processing result with success status, analysis data, and metadata
+ *
+ * @example
+ * ```typescript
+ * const result = await processAudio(
+ *   { inputPath: '/uploads/song.wav', outputPath: '/outputs/song.wav' },
+ *   {
+ *     onProgress: (percent) => console.log(`${percent}%`),
+ *     onStage: (stage) => console.log(stage)
+ *   },
+ *   'my-song.wav'
+ * );
+ *
+ * if (result.success) {
+ *   console.log(`Processed in ${result.duration}ms`);
+ *   console.log(`Type: ${result.processingType}`);
+ * }
+ * ```
  */
 export async function processAudio(
   options: ProcessingOptions,
@@ -301,7 +325,7 @@ export async function processAudio(
         profile.targetTruePeak,
         {
           onProgress: (percent) => {
-            const mappedProgress = 10 + Math.floor((percent / 100) * 85);
+            const mappedProgress = Math.min(100, 10 + Math.floor((percent / 100) * 85));
             callbacks?.onProgress?.(mappedProgress);
           },
           onStage: callbacks?.onStage,
@@ -342,7 +366,7 @@ export async function processAudio(
         profile,
         {
           onProgress: (percent) => {
-            const mappedProgress = 10 + Math.floor((percent / 100) * 85);
+            const mappedProgress = Math.min(100, 10 + Math.floor((percent / 100) * 85));
             callbacks?.onProgress?.(mappedProgress);
           },
           onStage: callbacks?.onStage,
@@ -395,7 +419,7 @@ export async function processAudio(
         options.outputPath,
         {
           onProgress: (percent) => {
-            const mappedProgress = 10 + Math.floor((percent / 100) * 85);
+            const mappedProgress = Math.min(100, 10 + Math.floor((percent / 100) * 85));
             callbacks?.onProgress?.(mappedProgress);
           },
           onStage: callbacks?.onStage,

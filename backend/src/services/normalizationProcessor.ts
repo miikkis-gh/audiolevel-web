@@ -4,9 +4,9 @@
  * Used for: Podcasts, Audiobooks, Voiceover, etc.
  */
 
-import { spawn } from 'bun';
 import { logger, createChildLogger } from '../utils/logger';
 import { env } from '../config/env';
+import { runFFmpegCommand } from '../utils/ffmpeg';
 import type { AudioProfile } from './profileDetector';
 
 export interface NormalizationAnalysis {
@@ -31,71 +31,7 @@ export interface NormalizationCallbacks {
   onStage?: (stage: string) => void;
 }
 
-/**
- * Run FFmpeg command and capture output
- */
-async function runFFmpeg(
-  args: string[],
-  timeoutMs: number = env.PROCESSING_TIMEOUT_MS
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve, reject) => {
-    let stdout = '';
-    let stderr = '';
-    let killed = false;
-
-    const proc = spawn({
-      cmd: ['ffmpeg', ...args],
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-
-    const timeout = setTimeout(() => {
-      killed = true;
-      proc.kill();
-      reject(new Error('FFmpeg timeout exceeded'));
-    }, timeoutMs);
-
-    (async () => {
-      const reader = proc.stdout.getReader();
-      const decoder = new TextDecoder();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          stdout += decoder.decode(value);
-        }
-      } catch {
-        // Ignore read errors on killed process
-      }
-    })();
-
-    (async () => {
-      const reader = proc.stderr.getReader();
-      const decoder = new TextDecoder();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          stderr += decoder.decode(value);
-        }
-      } catch {
-        // Ignore read errors on killed process
-      }
-    })();
-
-    proc.exited.then((exitCode) => {
-      clearTimeout(timeout);
-      if (!killed) {
-        resolve({ stdout, stderr, exitCode });
-      }
-    }).catch((err) => {
-      clearTimeout(timeout);
-      if (!killed) {
-        reject(err);
-      }
-    });
-  });
-}
+// Using shared runFFmpegCommand from utils/ffmpeg.ts
 
 /**
  * Analyze audio loudness
@@ -104,7 +40,7 @@ async function analyzeLoudness(inputPath: string): Promise<NormalizationAnalysis
   const log = createChildLogger({ inputPath });
 
   try {
-    const { stderr, exitCode } = await runFFmpeg([
+    const { stderr, exitCode } = await runFFmpegCommand([
       '-i', inputPath,
       '-af', 'ebur128=peak=true',
       '-f', 'null',
@@ -217,7 +153,7 @@ export async function runNormalizationProcess(
     const format = outputFormat || outputPath.split('.').pop()?.toLowerCase() || 'wav';
     const codecArgs = getCodecArgs(format);
 
-    const { stderr, exitCode } = await runFFmpeg([
+    const { stderr, exitCode } = await runFFmpegCommand([
       '-i', inputPath,
       '-af', filterChain,
       '-ar', '48000',
@@ -308,7 +244,7 @@ export async function runPeakNormalization(
     const format = outputFormat || outputPath.split('.').pop()?.toLowerCase() || 'wav';
     const codecArgs = getCodecArgs(format);
 
-    const { stderr, exitCode } = await runFFmpeg([
+    const { stderr, exitCode } = await runFFmpegCommand([
       '-i', inputPath,
       '-af', `highpass=f=25,volume=0dB:eval=once:replaygain=track:replaygain_preamp=${targetPeakDb}dB`,
       '-ar', '48000',

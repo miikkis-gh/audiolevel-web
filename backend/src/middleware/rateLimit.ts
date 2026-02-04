@@ -1,6 +1,7 @@
 import type { Context, Next } from 'hono';
 import { checkRateLimit, getClientIp, type RateLimitConfig } from '../services/rateLimit';
 import { logger } from '../utils/logger';
+import { RATE_LIMITS } from '../config/constants';
 
 export interface RateLimitOptions extends Partial<RateLimitConfig> {
   message?: string;
@@ -11,8 +12,8 @@ export interface RateLimitOptions extends Partial<RateLimitConfig> {
 }
 
 const DEFAULT_OPTIONS: RateLimitOptions = {
-  maxRequests: 10,
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  maxRequests: RATE_LIMITS.UPLOAD.maxRequests,
+  windowMs: RATE_LIMITS.UPLOAD.windowMs,
   message: 'Too many requests, please try again later',
   statusCode: 429,
   headers: true,
@@ -84,18 +85,28 @@ export function rateLimitMiddleware(options: RateLimitOptions = {}) {
  * Strict rate limiter for upload endpoint (10 per hour)
  */
 export const uploadRateLimiter = rateLimitMiddleware({
-  maxRequests: 10,
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  maxRequests: RATE_LIMITS.UPLOAD.maxRequests,
+  windowMs: RATE_LIMITS.UPLOAD.windowMs,
   keyPrefix: 'ratelimit:upload:',
-  message: 'Upload limit exceeded. You can upload 10 files per 15 minutes.',
+  message: `Upload limit exceeded. You can upload ${RATE_LIMITS.UPLOAD.maxRequests} files per ${RATE_LIMITS.UPLOAD.windowMs / 60000} minutes.`,
 });
 
 /**
- * General API rate limiter (100 per minute)
+ * General API rate limiter
  */
 export const apiRateLimiter = rateLimitMiddleware({
-  maxRequests: 100,
-  windowMs: 60 * 1000, // 1 minute
+  maxRequests: RATE_LIMITS.API.maxRequests,
+  windowMs: RATE_LIMITS.API.windowMs,
   keyPrefix: 'ratelimit:api:',
   message: 'Too many requests. Please slow down.',
+});
+
+/**
+ * Light rate limiter for status endpoints
+ */
+export const statusRateLimiter = rateLimitMiddleware({
+  maxRequests: RATE_LIMITS.STATUS.maxRequests,
+  windowMs: RATE_LIMITS.STATUS.windowMs,
+  keyPrefix: 'ratelimit:status:',
+  message: 'Too many status requests. Please slow down.',
 });

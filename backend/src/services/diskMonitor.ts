@@ -26,6 +26,23 @@ let lastDiskCheck: DiskUsage | null = null;
 let lastCheckTime = 0;
 const CHECK_CACHE_MS = 30000; // Cache disk check for 30 seconds
 
+// Track pending upload bytes to account for concurrent uploads
+let pendingUploadBytes = 0;
+
+/**
+ * Reserve disk space for an upload (call before accepting upload)
+ */
+export function reserveDiskSpace(bytes: number): void {
+  pendingUploadBytes += bytes;
+}
+
+/**
+ * Release reserved disk space (call after upload completes or fails)
+ */
+export function releaseDiskSpace(bytes: number): void {
+  pendingUploadBytes = Math.max(0, pendingUploadBytes - bytes);
+}
+
 /**
  * Get disk usage for the uploads/outputs directory
  */
@@ -119,8 +136,10 @@ export async function hasEnoughSpace(
 
   // Check if we have enough space for this specific file
   // Account for processing overhead (input + output + temp = ~3x)
+  // Also account for concurrent uploads that are in progress
   const estimatedRequired = requiredBytes * 3;
-  if (usage.free < estimatedRequired) {
+  const effectiveFreeSpace = usage.free - (pendingUploadBytes * 3);
+  if (effectiveFreeSpace < estimatedRequired) {
     return {
       allowed: false,
       reason: 'Not enough space to process this file',

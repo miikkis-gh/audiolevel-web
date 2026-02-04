@@ -6,13 +6,17 @@ import { fileTypeFromBuffer } from 'file-type';
 import { ALLOWED_MIME_TYPES } from '../schemas/upload';
 import { addAudioJob, getJobStatus, canAcceptJob, getQueueStatus } from '../services/queue';
 import { AppError } from '../middleware/errorHandler';
-import { uploadRateLimiter } from '../middleware/rateLimit';
+import { uploadRateLimiter, statusRateLimiter } from '../middleware/rateLimit';
 import { getRateLimitStatus, getClientIp } from '../services/rateLimit';
-import { hasEnoughSpace } from '../services/diskMonitor';
+import { hasEnoughSpace, reserveDiskSpace, releaseDiskSpace } from '../services/diskMonitor';
 import { env } from '../config/env';
+import { JOB_ID, FILE_HANDLING } from '../config/constants';
 import { logger, createChildLogger } from '../utils/logger';
 
 const upload = new Hono();
+
+// Use centralized job ID format from constants
+const JOB_ID_REGEX = JOB_ID.REGEX;
 
 const ALLOWED_EXTENSIONS = new Set([
   '.wav', '.mp3', '.flac', '.aac', '.ogg', '.m4a',
@@ -21,7 +25,8 @@ const ALLOWED_EXTENSIONS = new Set([
   '.ac3', '.dts', '.mp2',
 ]);
 
-// Rate limit status endpoint (no rate limiting applied)
+// Rate limit status endpoint
+upload.use('/rate-limit', statusRateLimiter);
 upload.get('/rate-limit', async (c) => {
   const clientIp = getClientIp(c.req.raw.headers);
   const status = await getRateLimitStatus(clientIp);
@@ -36,6 +41,7 @@ upload.get('/rate-limit', async (c) => {
 });
 
 // Queue status endpoint (for frontend graceful degradation)
+upload.use('/queue-status', statusRateLimiter);
 upload.get('/queue-status', async (c) => {
   const status = await getQueueStatus();
 
@@ -61,6 +67,9 @@ upload.post('/', async (c) => {
   }
 
   // Validate file size
+  if (file.size === 0) {
+    throw new AppError(400, 'File is empty', 'EMPTY_FILE');
+  }
   if (file.size > env.MAX_FILE_SIZE) {
     throw new AppError(400, `File too large. Maximum size is ${env.MAX_FILE_SIZE / 1024 / 1024}MB`, 'FILE_TOO_LARGE');
   }
@@ -71,9 +80,13 @@ upload.post('/', async (c) => {
     throw new AppError(503, diskCheck.reason || 'Insufficient storage', 'INSUFFICIENT_STORAGE');
   }
 
+  // Reserve disk space for this upload (accounts for concurrent uploads)
+  reserveDiskSpace(file.size);
+
   // Check queue capacity (graceful degradation)
   const queueCheck = await canAcceptJob(file.size);
   if (!queueCheck.allowed) {
+    releaseDiskSpace(file.size);
     throw new AppError(503, queueCheck.reason || 'Server busy', 'QUEUE_OVERLOADED');
   }
 
@@ -100,9 +113,10 @@ upload.post('/', async (c) => {
   // Stream file directly to disk (avoids loading entire file into memory)
   await Bun.write(inputPath, file);
 
-  // Validate file type via magic bytes (read only first 64KB)
+  // Validate file type via magic bytes
   const savedFile = Bun.file(inputPath);
-  const headerBuffer = Buffer.from(await savedFile.slice(0, 65536).arrayBuffer());
+  const headerSize = Math.min(FILE_HANDLING.HEADER_SIZE_BYTES, file.size);
+  const headerBuffer = Buffer.from(await savedFile.slice(0, headerSize).arrayBuffer());
   const fileType = await fileTypeFromBuffer(headerBuffer);
 
   // Accept if file-type detects a valid audio/video format:
@@ -118,9 +132,10 @@ upload.post('/', async (c) => {
   );
 
   if (!isValidMime) {
-    // Clean up invalid file
+    // Clean up invalid file and release reserved disk space
     await Bun.write(inputPath, '').catch(() => {});
     try { await import('fs/promises').then(fs => fs.unlink(inputPath)); } catch {}
+    releaseDiskSpace(file.size);
     logger.warn({ detectedMime: fileType?.mime, ext }, 'Rejected file with invalid MIME type');
     throw new AppError(400, 'Invalid audio file format', 'INVALID_FORMAT');
   }
@@ -137,6 +152,9 @@ upload.post('/', async (c) => {
     fileSize: file.size,
   });
 
+  // Release disk space reservation (file is now written, no longer "pending")
+  releaseDiskSpace(file.size);
+
   return c.json({
     jobId,
     status: 'queued',
@@ -148,6 +166,12 @@ upload.post('/', async (c) => {
 
 upload.get('/job/:id', async (c) => {
   const jobId = c.req.param('id');
+
+  // Validate jobId format
+  if (!JOB_ID_REGEX.test(jobId)) {
+    throw new AppError(400, 'Invalid job ID format', 'INVALID_JOB_ID');
+  }
+
   const status = await getJobStatus(jobId);
 
   if (!status) {
@@ -175,6 +199,12 @@ upload.get('/job/:id', async (c) => {
 
 upload.get('/job/:id/download', async (c) => {
   const jobId = c.req.param('id');
+
+  // Validate jobId format
+  if (!JOB_ID_REGEX.test(jobId)) {
+    throw new AppError(400, 'Invalid job ID format', 'INVALID_JOB_ID');
+  }
+
   const log = createChildLogger({ jobId, route: 'download' });
   const status = await getJobStatus(jobId);
 
@@ -195,8 +225,14 @@ upload.get('/job/:id/download', async (c) => {
 
   const fileSize = file.size;
   const contentType = file.type || 'application/octet-stream';
-  const downloadFilename = status.data.originalName.replace(/\.[^/.]+$/, '') + '-normalized' +
-    status.result.outputPath.substring(status.result.outputPath.lastIndexOf('.'));
+  // Sanitize filename to prevent path traversal and invalid characters
+  const sanitizedBaseName = status.data.originalName
+    .replace(/\.[^/.]+$/, '') // Remove extension
+    .replace(/[^a-z0-9._-]/gi, '_') // Replace unsafe chars
+    .replace(/^\.+/, '') // Remove leading dots
+    .substring(0, FILE_HANDLING.MAX_FILENAME_LENGTH);
+  const outputExt = status.result.outputPath.substring(status.result.outputPath.lastIndexOf('.'));
+  const downloadFilename = `${sanitizedBaseName}-normalized${outputExt}`;
 
   // Log download verification details
   log.info({

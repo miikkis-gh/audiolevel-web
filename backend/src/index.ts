@@ -51,14 +51,23 @@ app.onError((err, c) => {
 
 // Middleware
 app.use('*', honoLogger());
+// Parse allowed CORS origins from environment
+const allowedOrigins = env.CORS_ORIGINS
+  ? env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : [];
+
 app.use(
   '*',
   cors({
     origin: (origin) => {
       // Allow localhost for development
       if (origin?.includes('localhost')) return origin;
-      // Allow any origin in production (requests go through reverse proxy)
-      return origin || '*';
+      // If whitelist is configured, only allow those origins
+      if (allowedOrigins.length > 0) {
+        return allowedOrigins.includes(origin || '') ? origin : null;
+      }
+      // Fallback: allow origin (requests go through reverse proxy)
+      return origin || null;
     },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],

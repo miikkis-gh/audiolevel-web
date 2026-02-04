@@ -3,11 +3,19 @@ import { getRedisClient } from './redis';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
+/**
+ * Data required to create an audio processing job
+ */
 export interface AudioJobData {
+  /** Unique job identifier (nanoid) */
   jobId: string;
+  /** Absolute path to the uploaded input file */
   inputPath: string;
+  /** Absolute path where processed output will be saved */
   outputPath: string;
+  /** Original filename from upload (for download naming) */
   originalName: string;
+  /** File size in bytes (used for priority calculation) */
   fileSize?: number;
 }
 
@@ -111,6 +119,24 @@ export function getAudioQueue(): Queue<AudioJobData, AudioJobResult> {
   return audioQueue;
 }
 
+/**
+ * Add a new audio processing job to the queue.
+ * Jobs are prioritized by file size (smaller files processed first).
+ *
+ * @param data - Job data including file paths and metadata
+ * @returns The created BullMQ job instance
+ *
+ * @example
+ * ```typescript
+ * const job = await addAudioJob({
+ *   jobId: 'abc123',
+ *   inputPath: '/uploads/abc123-input.wav',
+ *   outputPath: '/outputs/abc123-output.wav',
+ *   originalName: 'my-audio.wav',
+ *   fileSize: 1024000
+ * });
+ * ```
+ */
 export async function addAudioJob(data: AudioJobData): Promise<Job<AudioJobData, AudioJobResult>> {
   const queue = getAudioQueue();
   const priority = calculatePriority(data.fileSize);
@@ -127,6 +153,20 @@ export async function addAudioJob(data: AudioJobData): Promise<Job<AudioJobData,
   return job;
 }
 
+/**
+ * Get the current status of a job by its ID.
+ *
+ * @param jobId - The unique job identifier
+ * @returns Job status object or null if not found
+ *
+ * @example
+ * ```typescript
+ * const status = await getJobStatus('abc123');
+ * if (status?.state === 'completed') {
+ *   console.log('Download ready:', status.result.outputPath);
+ * }
+ * ```
+ */
 export async function getJobStatus(jobId: string) {
   const queue = getAudioQueue();
   const job = await queue.getJob(jobId);
@@ -210,6 +250,21 @@ export async function getQueueStatus(): Promise<QueueStatus> {
 
 /**
  * Check if queue can accept new jobs (for graceful degradation)
+ */
+/**
+ * Check if the queue can accept a new job.
+ * Implements graceful degradation: rejects large files when queue is busy.
+ *
+ * @param fileSize - Optional file size in bytes for priority-based rejection
+ * @returns Object indicating if job is allowed and estimated wait time
+ *
+ * @example
+ * ```typescript
+ * const check = await canAcceptJob(50 * 1024 * 1024); // 50MB file
+ * if (!check.allowed) {
+ *   return res.status(503).json({ error: check.reason });
+ * }
+ * ```
  */
 export async function canAcceptJob(fileSize?: number): Promise<{
   allowed: boolean;

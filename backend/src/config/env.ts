@@ -10,6 +10,7 @@ const envSchema = z.object({
   MAX_CONCURRENT_JOBS: z.coerce.number().default(4),
   PROCESSING_TIMEOUT_MS: z.coerce.number().default(300000), // 5 minutes
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  CORS_ORIGINS: z.string().default(''), // Comma-separated list of allowed origins
 });
 
 export type Env = z.infer<typeof envSchema>;
