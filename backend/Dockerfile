@@ -69,11 +69,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     curl \
-    # ViSQOL runtime dependencies
-    libarmadillo11 \
-    libfftw3-3 \
     libsndfile1 \
     && pip3 install --break-system-packages ffmpeg-normalize \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ViSQOL runtime dependencies (optional - package names vary by Debian version)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libarmadillo12 libfftw3-double3 2>/dev/null \
+    || apt-get install -y --no-install-recommends libarmadillo-dev libfftw3-dev 2>/dev/null \
+    || echo "ViSQOL runtime deps not found - will use spectral fallback" \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy ViSQOL from builder stage
