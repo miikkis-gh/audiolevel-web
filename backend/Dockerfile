@@ -1,7 +1,7 @@
 FROM oven/bun:1-alpine
 
-# Install FFmpeg and ffmpeg-normalize
-RUN apk add --no-cache ffmpeg python3 py3-pip curl \
+# Install FFmpeg, SoX, and ffmpeg-normalize
+RUN apk add --no-cache ffmpeg sox python3 py3-pip curl \
     && pip3 install --break-system-packages ffmpeg-normalize
 
 WORKDIR /app

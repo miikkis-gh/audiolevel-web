@@ -70,3 +70,32 @@ export type {
   DiskUsage,
   DiskThresholds,
 } from '../services/diskMonitor';
+
+// Audio analysis types (intelligent processing)
+export type {
+  AnalysisResult,
+  AnalysisMetrics,
+  AudioProblems,
+  ContentClassification,
+  ContentType,
+  ContentSignal,
+  Severity,
+  AnalysisThresholds,
+} from './analysis';
+
+// Processing candidate types
+export type {
+  ProcessingCandidate,
+  FilterConfig,
+  CandidateGenerationResult,
+  AggressivenessLevel,
+} from './candidate';
+
+// Evaluation types
+export type {
+  CandidateMetrics,
+  CandidateScore,
+  EvaluationResult,
+  EvaluationConfig,
+  ScoringWeights,
+} from './evaluation';
