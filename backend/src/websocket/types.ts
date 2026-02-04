@@ -48,6 +48,16 @@ export interface ProgressMessage {
   stage?: string;
 }
 
+// Processing report for intelligent processing
+export interface ProcessingReportMessage {
+  contentType: string;
+  contentConfidence: number;
+  problemsDetected: { problem: string; details: string; severity?: string }[];
+  processingApplied: string[];
+  candidatesTested: { name: string; score: number; isWinner: boolean }[];
+  winnerReason: string;
+}
+
 export interface CompleteMessage {
   type: typeof WS_MESSAGE_TYPES.COMPLETE;
   jobId: string;
@@ -55,6 +65,7 @@ export interface CompleteMessage {
   duration?: number;
   inputLufs?: number;
   outputLufs?: number;
+  processingReport?: ProcessingReportMessage;
 }
 
 export interface ErrorMessage {
@@ -104,7 +115,12 @@ export function createProgressMessage(
 export function createCompleteMessage(
   jobId: string,
   downloadUrl: string,
-  options?: { duration?: number; inputLufs?: number; outputLufs?: number }
+  options?: {
+    duration?: number;
+    inputLufs?: number;
+    outputLufs?: number;
+    processingReport?: ProcessingReportMessage;
+  }
 ): CompleteMessage {
   return {
     type: WS_MESSAGE_TYPES.COMPLETE,

@@ -57,6 +57,7 @@ export type {
   ProgressMessage,
   CompleteMessage,
   ErrorMessage,
+  ProcessingReportMessage,
 } from '../websocket/types';
 
 // Rate limiting types

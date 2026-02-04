@@ -10,6 +10,26 @@ export interface Levels {
   lra: string;
 }
 
+// Intelligent processing types
+export interface ProblemDetected {
+  problem: string;
+  details: string;
+  severity?: 'mild' | 'moderate' | 'severe';
+}
+
+export interface CandidateTested {
+  name: string;
+  score: number;
+  isWinner: boolean;
+}
+
+export interface IntelligentProcessingReport {
+  problemsDetected: ProblemDetected[];
+  processingApplied: string[];
+  candidatesTested: CandidateTested[];
+  winnerReason: string;
+}
+
 export interface SingleReportData {
   detectedAs: string;
   confidence: string;
@@ -19,6 +39,8 @@ export interface SingleReportData {
   target: string;
   standard: string;
   notes: string[];
+  // Optional intelligent processing data
+  intelligentProcessing?: IntelligentProcessingReport;
 }
 
 export interface BatchReportData {
@@ -76,6 +98,23 @@ export const SINGLE_REPORT: SingleReportData = {
     'No DC offset detected',
     'No clipping detected in source',
   ],
+  intelligentProcessing: {
+    problemsDetected: [
+      { problem: 'True peak clipping', details: 'Peak at -0.3 dBTP exceeds target', severity: 'mild' },
+      { problem: 'Low loudness', details: 'Source at -18.2 LUFS, target is -14 LUFS', severity: 'moderate' },
+    ],
+    processingApplied: [
+      'High-pass filter (30 Hz)',
+      'Loudness normalization to -14 LUFS',
+      'True peak limiting to -1 dBTP',
+    ],
+    candidatesTested: [
+      { name: 'Conservative', score: 85, isWinner: false },
+      { name: 'Balanced', score: 92, isWinner: true },
+      { name: 'Aggressive', score: 78, isWinner: false },
+    ],
+    winnerReason: 'Best loudness accuracy with preserved dynamics',
+  },
 };
 
 export const OVERRIDE_TYPES: OverrideType[] = [
