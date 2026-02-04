@@ -63,3 +63,7 @@ CLAUDE_CODE_INSTRUCTIONS.md
 
 # Claude Code
 .claude/
+
+# Tool metadata
+.github-metadata/
+.serena/
