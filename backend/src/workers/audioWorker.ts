@@ -1,6 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import { getRedisClient } from '../services/redis';
-import { processAudio, verifyDependencies } from '../services/audioProcessor';
+import { verifyDependencies } from '../services/audioProcessor';
+import { runIntelligentProcessing } from '../services/intelligentProcessor';
 import { env } from '../config/env';
 import { logger, createChildLogger } from '../utils/logger';
 import { emitJobProgress, emitJobComplete, emitJobError } from '../websocket/events';
@@ -9,7 +10,7 @@ import type { AudioJobData, AudioJobResult } from '../services/queue';
 let audioWorker: Worker<AudioJobData, AudioJobResult> | null = null;
 
 /**
- * Process an audio job
+ * Process an audio job using intelligent processing
  */
 async function processAudioJob(
   job: Job<AudioJobData, AudioJobResult>
@@ -19,17 +20,15 @@ async function processAudioJob(
     originalName: job.data.originalName,
   });
 
-  log.info('Starting audio processing job');
+  log.info('Starting intelligent audio processing job');
 
   try {
     // Update progress
     await job.updateProgress(0);
 
-    const result = await processAudio(
-      {
-        inputPath: job.data.inputPath,
-        outputPath: job.data.outputPath,
-      },
+    const result = await runIntelligentProcessing(
+      job.data.inputPath,
+      job.data.outputPath,
       {
         onProgress: async (percent) => {
           await job.updateProgress(percent);
@@ -37,36 +36,61 @@ async function processAudioJob(
         onStage: (stage) => {
           log.info({ stage }, 'Processing stage');
         },
-      },
-      job.data.originalName // Pass filename for profile detection
+      }
     );
 
     if (result.success) {
       log.info(
         {
           duration: result.duration,
-          processingType: result.processingType,
-          detectedProfile: result.detectedProfile?.type,
-          confidence: result.detectedProfile?.confidence,
-          inputLufs: result.inputAnalysis?.inputLufs,
-          outputLufs: result.outputAnalysis?.inputLufs,
+          contentType: result.analysis?.contentType.type,
+          confidence: result.analysis?.contentType.confidence,
+          problemCount: result.analysis?.problemDescriptions.length,
+          winner: result.evaluation?.winnerName,
         },
-        'Audio processing completed successfully'
+        'Intelligent processing completed successfully'
       );
 
+      // Map to job result format
       return {
         success: true,
         outputPath: result.outputPath,
         duration: result.duration,
-        processingType: result.processingType,
-        masteringDecisions: result.masteringDecisions,
-        filterChain: result.filterChain,
-        inputAnalysis: result.inputAnalysis,
-        outputAnalysis: result.outputAnalysis,
-        detectedProfile: result.detectedProfile,
+        processingType: 'intelligent',
+        inputAnalysis: result.analysis ? {
+          inputLufs: result.analysis.metrics.integratedLufs,
+          inputTruePeak: result.analysis.metrics.truePeak,
+          inputLoudnessRange: result.analysis.metrics.loudnessRange,
+        } : undefined,
+        outputAnalysis: result.processingReport ? {
+          inputLufs: result.processingReport.outputMetrics.lufs,
+          inputTruePeak: result.processingReport.outputMetrics.truePeak,
+          inputLoudnessRange: result.processingReport.outputMetrics.lra,
+        } : undefined,
+        detectedProfile: result.analysis ? {
+          type: mapContentTypeToProfile(result.analysis.contentType.type),
+          label: formatContentTypeLabel(result.analysis.contentType.type),
+          confidence: mapConfidence(result.analysis.contentType.confidence),
+          targetLufs: result.analysis.contentType.type === 'music' ? -14 : -16,
+          targetTruePeak: result.analysis.contentType.type === 'music' ? -1 : -1.5,
+          standard: getStandardForContentType(result.analysis.contentType.type),
+          reasons: result.analysis.contentType.signals.map(s => ({
+            signal: s.name,
+            detail: `${s.indicates} indicator (${s.value.toFixed(2)})`,
+            weight: s.weight,
+          })),
+        } : undefined,
+        processingReport: result.processingReport ? {
+          contentType: result.processingReport.contentType,
+          contentConfidence: result.processingReport.contentConfidence,
+          problemsDetected: result.processingReport.problemsDetected,
+          processingApplied: result.processingReport.processingApplied,
+          candidatesTested: result.processingReport.candidatesTested,
+          winnerReason: result.processingReport.winnerReason,
+        } : undefined,
       };
     } else {
-      log.error({ error: result.error }, 'Audio processing failed');
+      log.error({ error: result.error }, 'Intelligent processing failed');
       throw new Error(result.error || 'Unknown processing error');
     }
   } catch (err) {
@@ -78,6 +102,54 @@ async function processAudioJob(
       error: errorMessage,
     };
   }
+}
+
+/**
+ * Map content type to profile type string
+ */
+function mapContentTypeToProfile(contentType: string): string {
+  const map: Record<string, string> = {
+    'speech': 'SPEECH_PODCAST',
+    'music': 'MUSIC_SONG',
+    'podcast_mixed': 'SPEECH_PODCAST',
+    'unknown': 'MUSIC_SONG',
+  };
+  return map[contentType] || 'MUSIC_SONG';
+}
+
+/**
+ * Format content type as display label
+ */
+function formatContentTypeLabel(contentType: string): string {
+  const map: Record<string, string> = {
+    'speech': 'Podcast / Talk',
+    'music': 'Music / Song',
+    'podcast_mixed': 'Podcast (Mixed)',
+    'unknown': 'Unknown',
+  };
+  return map[contentType] || 'Unknown';
+}
+
+/**
+ * Map confidence score to HIGH/MEDIUM/LOW
+ */
+function mapConfidence(confidence: number): 'HIGH' | 'MEDIUM' | 'LOW' {
+  if (confidence >= 0.7) return 'HIGH';
+  if (confidence >= 0.5) return 'MEDIUM';
+  return 'LOW';
+}
+
+/**
+ * Get standard description for content type
+ */
+function getStandardForContentType(contentType: string): string {
+  const map: Record<string, string> = {
+    'speech': 'Podcast (Spotify / Apple compatible)',
+    'music': 'Streaming (Spotify / Apple Music / YouTube)',
+    'podcast_mixed': 'Podcast (Spotify / Apple compatible)',
+    'unknown': 'Streaming (Spotify / Apple Music / YouTube)',
+  };
+  return map[contentType] || 'Streaming';
 }
 
 /**
@@ -123,6 +195,7 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
         jobId: job.data.jobId,
         success: result.success,
         duration: result.duration,
+        processingType: result.processingType,
       },
       'Job completed'
     );
@@ -132,6 +205,9 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
       emitJobComplete(job.data.jobId, {
         downloadUrl: `/api/upload/job/${job.data.jobId}/download`,
         duration: result.duration,
+        inputLufs: result.inputAnalysis?.inputLufs,
+        outputLufs: result.outputAnalysis?.inputLufs,
+        processingReport: result.processingReport,
       });
     }
   });

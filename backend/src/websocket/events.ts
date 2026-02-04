@@ -3,6 +3,7 @@ import {
   createProgressMessage,
   createCompleteMessage,
   createErrorMessage,
+  type ProcessingReportMessage,
 } from './types';
 import { logger } from '../utils/logger';
 
@@ -24,9 +25,10 @@ export function emitJobComplete(
     duration?: number;
     inputLufs?: number;
     outputLufs?: number;
+    processingReport?: ProcessingReportMessage;
   }
 ): void {
-  logger.info({ jobId, ...options }, 'Emitting job completion');
+  logger.info({ jobId, downloadUrl: options.downloadUrl, duration: options.duration }, 'Emitting job completion');
   broadcastToJob(jobId, createCompleteMessage(jobId, options.downloadUrl, options));
 }
 

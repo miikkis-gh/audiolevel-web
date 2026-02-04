@@ -65,7 +65,7 @@ export interface AudioJobResult {
   error?: string;
   duration?: number;
   // Processing type based on detected profile
-  processingType?: 'mastering' | 'normalization' | 'peak-normalization';
+  processingType?: 'mastering' | 'normalization' | 'peak-normalization' | 'intelligent';
   masteringDecisions?: {
     compressionEnabled: boolean;
     saturationEnabled: boolean;
@@ -83,6 +83,15 @@ export interface AudioJobResult {
   };
   // Profile detection results
   detectedProfile?: DetectedProfileInfo;
+  // Intelligent processing report
+  processingReport?: {
+    contentType: string;
+    contentConfidence: number;
+    problemsDetected: { problem: string; details: string }[];
+    processingApplied: string[];
+    candidatesTested: { name: string; score: number; isWinner: boolean }[];
+    winnerReason: string;
+  };
 }
 
 let audioQueue: Queue<AudioJobData, AudioJobResult> | null = null;
