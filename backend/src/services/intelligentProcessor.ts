@@ -266,7 +266,7 @@ function buildProcessingReport(
     processingApplied: winner?.filtersApplied || [],
     candidatesTested: evaluation.candidates.map(c => ({
       name: c.candidateName,
-      score: Math.round(c.totalScore),
+      score: Math.round(c.totalScore * 10) / 10, // One decimal place
       isWinner: c.candidateId === evaluation.winnerId,
     })),
     winnerReason: evaluation.winnerReason,
