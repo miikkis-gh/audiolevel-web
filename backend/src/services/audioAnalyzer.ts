@@ -409,37 +409,46 @@ function classifyContent(metrics: AnalysisMetrics): ContentClassification {
   let speechScore = 0;
   let musicScore = 0;
 
+  // Calculate "content silence ratio" excluding leading/trailing padding
+  // This prevents music with silent tails from being misclassified as speech
+  const paddingSilence = metrics.leadingSilence + metrics.trailingSilence;
+  const contentDuration = metrics.duration - paddingSilence;
+  const totalSilence = metrics.silenceRatio * metrics.duration;
+  const contentSilence = Math.max(0, totalSilence - paddingSilence);
+  const contentSilenceRatio = contentDuration > 0 ? contentSilence / contentDuration : 0;
+
   // Silence ratio: THE most reliable differentiator (high weight)
   // Music fills the space, speech has natural pauses
-  if (metrics.silenceRatio > 0.20) {
+  // Use content silence ratio to ignore padding
+  if (contentSilenceRatio > 0.20) {
     speechScore += 0.4;
     signals.push({
-      name: 'High silence ratio',
-      value: metrics.silenceRatio,
+      name: 'High content silence ratio',
+      value: contentSilenceRatio,
       indicates: 'speech',
       weight: 0.4,
     });
-  } else if (metrics.silenceRatio > 0.10) {
+  } else if (contentSilenceRatio > 0.10) {
     speechScore += 0.2;
     signals.push({
-      name: 'Moderate silence ratio',
-      value: metrics.silenceRatio,
+      name: 'Moderate content silence ratio',
+      value: contentSilenceRatio,
       indicates: 'speech',
       weight: 0.2,
     });
-  } else if (metrics.silenceRatio < 0.03) {
+  } else if (contentSilenceRatio < 0.03) {
     musicScore += 0.4;
     signals.push({
-      name: 'Very low silence ratio',
-      value: metrics.silenceRatio,
+      name: 'Very low content silence ratio',
+      value: contentSilenceRatio,
       indicates: 'music',
       weight: 0.4,
     });
-  } else if (metrics.silenceRatio < 0.08) {
+  } else if (contentSilenceRatio < 0.08) {
     musicScore += 0.25;
     signals.push({
-      name: 'Low silence ratio',
-      value: metrics.silenceRatio,
+      name: 'Low content silence ratio',
+      value: contentSilenceRatio,
       indicates: 'music',
       weight: 0.25,
     });
@@ -487,8 +496,8 @@ function classifyContent(metrics: AnalysisMetrics): ContentClassification {
       indicates: 'music',
       weight: 0.15,
     });
-  } else if (metrics.loudnessRange < 6 && metrics.silenceRatio > 0.10) {
-    // Only count as speech if there's also significant silence
+  } else if (metrics.loudnessRange < 6 && contentSilenceRatio > 0.10) {
+    // Only count as speech if there's also significant content silence
     speechScore += 0.15;
     signals.push({
       name: 'Narrow loudness range with pauses',
@@ -508,8 +517,8 @@ function classifyContent(metrics: AnalysisMetrics): ContentClassification {
       indicates: 'music',
       weight: 0.1,
     });
-  } else if (metrics.spectralCentroid < 1500 && metrics.spectralCentroid > 300 && metrics.silenceRatio > 0.12) {
-    // Voice-range centroid only counts with moderate silence
+  } else if (metrics.spectralCentroid < 1500 && metrics.spectralCentroid > 300 && contentSilenceRatio > 0.12) {
+    // Voice-range centroid only counts with moderate content silence
     speechScore += 0.15;
     signals.push({
       name: 'Voice-range spectral centroid',
