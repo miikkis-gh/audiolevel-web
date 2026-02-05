@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { readdir, stat, unlink } from 'fs/promises';
+import { readdir, stat, unlink, rm } from 'fs/promises';
 import { join, basename } from 'path';
 import { env } from '../config/env';
 import { logger, createChildLogger } from '../utils/logger';
@@ -31,6 +31,10 @@ async function cleanupDirectory(dirPath: string, maxAgeMinutes: number): Promise
 
       try {
         const stats = await stat(filePath);
+
+        // Skip directories - they're handled separately
+        if (stats.isDirectory()) continue;
+
         // Use creation time (birthtimeMs) when available, fall back to ctime then mtime
         const fileTime = stats.birthtimeMs || stats.ctimeMs || stats.mtimeMs;
         const fileAge = now - fileTime;
@@ -170,6 +174,56 @@ export async function runOrphanCleanup(): Promise<{ uploads: number; outputs: nu
 }
 
 /**
+ * Clean up old intelligent processing work directories
+ * These are temporary directories created during candidate processing
+ */
+async function cleanupWorkDirectories(maxAgeMinutes: number): Promise<number> {
+  const log = createChildLogger({ type: 'work-dir-cleanup' });
+  const workDir = join(env.OUTPUT_DIR, '.intelligent-work');
+  let deletedCount = 0;
+
+  try {
+    const entries = await readdir(workDir);
+    const now = Date.now();
+    const maxAgeMs = maxAgeMinutes * 60 * 1000;
+
+    for (const entry of entries) {
+      // Only process job-* directories
+      if (!entry.startsWith('job-')) continue;
+
+      const dirPath = join(workDir, entry);
+
+      try {
+        const stats = await stat(dirPath);
+        if (!stats.isDirectory()) continue;
+
+        const dirTime = stats.birthtimeMs || stats.ctimeMs || stats.mtimeMs;
+        const dirAge = now - dirTime;
+
+        if (dirAge > maxAgeMs) {
+          await rm(dirPath, { recursive: true, force: true });
+          deletedCount++;
+          log.info({ directory: entry, ageMinutes: Math.round(dirAge / 60000) }, 'Deleted old work directory');
+        }
+      } catch (err) {
+        log.error({ err, directory: entry }, 'Failed to cleanup work directory');
+      }
+    }
+
+    if (deletedCount > 0) {
+      log.info({ deletedCount }, 'Work directory cleanup complete');
+    }
+  } catch (err) {
+    // Work directory might not exist, which is fine
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      log.error({ err }, 'Failed to read work directory');
+    }
+  }
+
+  return deletedCount;
+}
+
+/**
  * Get cleanup statistics
  */
 export async function getCleanupStats(): Promise<{
@@ -218,6 +272,8 @@ export function startCleanupJob(): void {
   // Age-based cleanup: Run every 5 minutes
   cleanupTask = cron.schedule('*/5 * * * *', async () => {
     await runCleanup();
+    // Also cleanup old work directories (use same retention as files)
+    await cleanupWorkDirectories(env.FILE_RETENTION_MINUTES);
   });
 
   // Orphan cleanup: Run every 10 minutes
