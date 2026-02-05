@@ -1271,7 +1271,7 @@
 
   .reject-msg {
     position: fixed;
-    bottom: 28px;
+    bottom: 70px;
     left: 50%;
     transform: translateX(-50%);
     font-family: 'IBM Plex Mono', monospace;
@@ -1290,7 +1290,7 @@
 
   .error-msg {
     position: fixed;
-    bottom: 28px;
+    bottom: 70px;
     left: 50%;
     transform: translateX(-50%);
     font-family: 'IBM Plex Mono', monospace;
