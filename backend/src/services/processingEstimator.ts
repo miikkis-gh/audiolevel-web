@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import type { AnalysisMetrics } from '../types/analysis';
-import type { AudioFingerprint, ProcessingOutcome } from '../types/estimator';
+import type { AudioFingerprint, ProcessingOutcome, SimilarMatch, EstimatorConfig } from '../types/estimator';
 
 /**
  * Normalization ranges for each metric
@@ -107,4 +107,51 @@ export function clearHistory(historyPath: string): void {
     mkdirSync(dir, { recursive: true });
   }
   writeFileSync(historyPath, '[]');
+}
+
+/**
+ * Find similar historical processing outcomes
+ */
+export function findSimilar(
+  fingerprint: AudioFingerprint,
+  config: EstimatorConfig
+): SimilarMatch | null {
+  const history = loadHistory(config.historyPath);
+
+  if (history.length === 0) {
+    return null;
+  }
+
+  // Find all matches within moderate threshold
+  const matches: Array<{ outcome: ProcessingOutcome; distance: number }> = [];
+
+  for (const outcome of history) {
+    const distance = computeDistance(fingerprint, outcome.fingerprint);
+    if (distance <= config.moderateThreshold) {
+      matches.push({ outcome, distance });
+    }
+  }
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  // Sort by distance (closest first)
+  matches.sort((a, b) => a.distance - b.distance);
+
+  const closest = matches[0];
+  const confidence = closest.distance <= config.highThreshold ? 'high' : 'moderate';
+
+  // Count how many matches agree on the winner
+  const matchCount = matches.filter(
+    m => m.outcome.winnerCandidateId === closest.outcome.winnerCandidateId
+  ).length;
+
+  return {
+    confidence,
+    predictedWinner: closest.outcome.winnerCandidateId,
+    predictedAggressiveness: closest.outcome.winnerAggressiveness,
+    distance: closest.distance,
+    matchCount,
+  };
 }

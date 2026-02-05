@@ -1,11 +1,19 @@
 import { describe, expect, test, beforeEach, afterAll } from 'bun:test';
-import { extractFingerprint, computeDistance, loadHistory, saveOutcome, clearHistory } from '../services/processingEstimator';
-import type { AudioFingerprint } from '../types/estimator';
-import type { ProcessingOutcome } from '../types/estimator';
+import { extractFingerprint, computeDistance, loadHistory, saveOutcome, clearHistory, findSimilar } from '../services/processingEstimator';
+import type { AudioFingerprint, ProcessingOutcome, EstimatorConfig } from '../types/estimator';
 import type { AnalysisMetrics } from '../types/analysis';
 import { rmSync, existsSync } from 'fs';
 
 const TEST_HISTORY_PATH = 'data/test-processing-history.json';
+
+const TEST_CONFIG: EstimatorConfig = {
+  historyPath: TEST_HISTORY_PATH,
+  statsPath: 'data/test-estimator-stats.json',
+  highThreshold: 0.05,
+  moderateThreshold: 0.15,
+  maxHistory: 10000,
+  enabled: true,
+};
 
 describe('Processing Estimator', () => {
   describe('extractFingerprint', () => {
@@ -236,6 +244,144 @@ describe('Processing Estimator', () => {
 
       const history = loadHistory(TEST_HISTORY_PATH);
       expect(history).toEqual([]);
+    });
+  });
+
+  describe('findSimilar', () => {
+    beforeEach(() => {
+      clearHistory(TEST_HISTORY_PATH);
+    });
+
+    test('returns null when history is empty', () => {
+      const fingerprint: AudioFingerprint = {
+        integratedLufs: -16,
+        loudnessRange: 10,
+        silenceRatio: 0.1,
+        spectralCentroid: 2500,
+        spectralFlatness: 0.4,
+      };
+
+      const match = findSimilar(fingerprint, TEST_CONFIG);
+      expect(match).toBeNull();
+    });
+
+    test('returns high confidence for very similar fingerprint', () => {
+      const outcome: ProcessingOutcome = {
+        fingerprint: {
+          integratedLufs: -16,
+          loudnessRange: 10,
+          silenceRatio: 0.1,
+          spectralCentroid: 2500,
+          spectralFlatness: 0.4,
+        },
+        winnerCandidateId: 'conservative-speech',
+        winnerAggressiveness: 'conservative',
+        contentType: 'speech',
+        timestamp: Date.now(),
+      };
+      saveOutcome(outcome, TEST_HISTORY_PATH);
+
+      const query: AudioFingerprint = {
+        integratedLufs: -16.1,
+        loudnessRange: 10.05,
+        silenceRatio: 0.1,
+        spectralCentroid: 2510,
+        spectralFlatness: 0.41,
+      };
+
+      const match = findSimilar(query, TEST_CONFIG);
+      expect(match).not.toBeNull();
+      expect(match!.confidence).toBe('high');
+      expect(match!.predictedWinner).toBe('conservative-speech');
+    });
+
+    test('returns moderate confidence for somewhat similar fingerprint', () => {
+      const outcome: ProcessingOutcome = {
+        fingerprint: {
+          integratedLufs: -16,
+          loudnessRange: 10,
+          silenceRatio: 0.1,
+          spectralCentroid: 2500,
+          spectralFlatness: 0.4,
+        },
+        winnerCandidateId: 'conservative-speech',
+        winnerAggressiveness: 'conservative',
+        contentType: 'speech',
+        timestamp: Date.now(),
+      };
+      saveOutcome(outcome, TEST_HISTORY_PATH);
+
+      // Fingerprint with distance ~0.08 (between high=0.05 and moderate=0.15)
+      const query: AudioFingerprint = {
+        integratedLufs: -20,
+        loudnessRange: 14,
+        silenceRatio: 0.18,
+        spectralCentroid: 3000,
+        spectralFlatness: 0.5,
+      };
+
+      const match = findSimilar(query, TEST_CONFIG);
+      expect(match).not.toBeNull();
+      expect(match!.confidence).toBe('moderate');
+    });
+
+    test('returns null for dissimilar fingerprint', () => {
+      const outcome: ProcessingOutcome = {
+        fingerprint: {
+          integratedLufs: -16,
+          loudnessRange: 10,
+          silenceRatio: 0.2,
+          spectralCentroid: 2500,
+          spectralFlatness: 0.5,
+        },
+        winnerCandidateId: 'conservative-speech',
+        winnerAggressiveness: 'conservative',
+        contentType: 'speech',
+        timestamp: Date.now(),
+      };
+      saveOutcome(outcome, TEST_HISTORY_PATH);
+
+      const query: AudioFingerprint = {
+        integratedLufs: -8,
+        loudnessRange: 5,
+        silenceRatio: 0.01,
+        spectralCentroid: 1000,
+        spectralFlatness: 0.1,
+      };
+
+      const match = findSimilar(query, TEST_CONFIG);
+      expect(match).toBeNull();
+    });
+
+    test('matchCount reflects number of agreeing history entries', () => {
+      for (let i = 0; i < 3; i++) {
+        const outcome: ProcessingOutcome = {
+          fingerprint: {
+            integratedLufs: -16 + i * 0.1,
+            loudnessRange: 10,
+            silenceRatio: 0.1,
+            spectralCentroid: 2500,
+            spectralFlatness: 0.4,
+          },
+          winnerCandidateId: 'conservative-speech',
+          winnerAggressiveness: 'conservative',
+          contentType: 'speech',
+          timestamp: Date.now(),
+        };
+        saveOutcome(outcome, TEST_HISTORY_PATH);
+      }
+
+      const query: AudioFingerprint = {
+        integratedLufs: -16,
+        loudnessRange: 10,
+        silenceRatio: 0.1,
+        spectralCentroid: 2500,
+        spectralFlatness: 0.4,
+      };
+
+      const match = findSimilar(query, TEST_CONFIG);
+      expect(match).not.toBeNull();
+      expect(match!.matchCount).toBeGreaterThanOrEqual(1);
     });
   });
 });
