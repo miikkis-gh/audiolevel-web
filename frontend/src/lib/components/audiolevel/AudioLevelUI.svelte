@@ -1142,10 +1142,11 @@
         </span>
       </div>
       <div class="status-divider"></div>
+      {@const remaining = Math.max(0, rateLimitStatus.resetAt - now)}
       <div class="status-item">
         <span class="status-label">Resets</span>
         <span class="status-value">
-          {Math.max(0, Math.ceil((rateLimitStatus.resetAt - now) / 60000))}m
+          {Math.floor(remaining / 60000)}:{Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0')}
         </span>
       </div>
     {/if}
