@@ -14,6 +14,13 @@ const envSchema = z.object({
   // ViSQOL configuration
   VISQOL_PATH: z.string().default('visqol'), // Path to ViSQOL binary
   VISQOL_MODEL_PATH: z.string().default('/usr/local/visqol/model/libsvm_nu_svr_model.txt'),
+  // Processing estimator configuration
+  ESTIMATOR_ENABLED: z.coerce.boolean().default(true),
+  ESTIMATOR_HISTORY_PATH: z.string().default('data/processing-history.json'),
+  ESTIMATOR_STATS_PATH: z.string().default('data/estimator-stats.json'),
+  ESTIMATOR_HIGH_THRESHOLD: z.coerce.number().default(0.05),
+  ESTIMATOR_MODERATE_THRESHOLD: z.coerce.number().default(0.15),
+  ESTIMATOR_MAX_HISTORY: z.coerce.number().default(10000),
   // Discord webhook for rating feedback
   DISCORD_WEBHOOK_URL: z.string().optional(),
 });
