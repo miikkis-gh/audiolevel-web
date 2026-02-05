@@ -243,47 +243,20 @@ interface QualityResult {
 }
 
 /**
- * Get ViSQOL perceptual quality score
+ * Get perceptual quality score using spectral analysis
  *
- * ViSQOL compares processed vs original and returns MOS (1-5).
- * If ViSQOL is not available, falls back to spectral analysis.
+ * ViSQOL is disabled due to performance constraints on low-resource servers.
+ * Spectral analysis provides fast, reliable quality estimation by comparing:
+ * - Dynamic range preservation
+ * - Tonal balance (spectral centroid)
+ * - High-frequency energy
+ * - Artifact detection (spectral flatness changes)
  */
 async function getVisqolScore(
   processedPath: string,
   originalPath: string
 ): Promise<QualityResult> {
-  // Check availability (cached after first check)
-  const hasVisqol = await checkVisqolAvailability();
-
-  if (hasVisqol) {
-    try {
-      // Use SVR model for audio mode (lattice/tflite models are speech-only)
-      const svrModelPath = '/usr/local/visqol/model/libsvm_nu_svr_model.txt';
-      const { stdout, stderr, exitCode } = await runCommand(env.VISQOL_PATH, [
-        '--reference_file', originalPath,
-        '--degraded_file', processedPath,
-        '--similarity_to_quality_model', svrModelPath,
-      ], { timeoutMs: 60000 });
-
-      if (exitCode === 0) {
-        // Parse MOS score from output
-        const mosMatch = stdout.match(/MOS-LQO:\s*([\d.]+)/);
-        if (mosMatch) {
-          const score = parseFloat(mosMatch[1]);
-          log.info({ processedPath: processedPath.split('/').pop(), visqolScore: score }, 'ViSQOL score calculated');
-          return { score, method: 'visqol' };
-        } else {
-          log.warn({ stdout: stdout.slice(0, 500), stderr: stderr.slice(0, 200) }, 'ViSQOL output did not contain MOS score');
-        }
-      } else {
-        log.warn({ exitCode, stderr: stderr.slice(0, 500) }, 'ViSQOL returned non-zero exit code');
-      }
-    } catch (err) {
-      log.warn({ err }, 'ViSQOL execution failed, using fallback');
-    }
-  }
-
-  // Fallback: spectral analysis-based quality estimate
+  // Use spectral analysis - fast and reliable for all file lengths
   const score = await estimatePerceptualQuality(processedPath, originalPath);
   return { score, method: 'spectral_fallback' };
 }
