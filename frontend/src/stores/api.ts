@@ -35,6 +35,8 @@ export interface ProcessingReport {
   processingApplied: string[];
   candidatesTested: { name: string; score: number; isWinner: boolean }[];
   winnerReason: string;
+  /** Method used for perceptual quality scoring */
+  qualityMethod?: 'visqol' | 'spectral_fallback';
 }
 
 export interface JobResult {

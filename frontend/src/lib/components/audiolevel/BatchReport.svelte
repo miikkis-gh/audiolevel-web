@@ -171,6 +171,14 @@
               <span class="reason-label">Why it won:</span> {ip.winnerReason}
             </div>
           {/if}
+          {#if ip.qualityMethod}
+            <div class="quality-method">
+              <span class="method-label">Quality scoring:</span>
+              <span class="method-value" class:is-visqol={ip.qualityMethod === 'visqol'}>
+                {ip.qualityMethod === 'visqol' ? 'ViSQOL' : 'Spectral Analysis'}
+              </span>
+            </div>
+          {/if}
         </div>
       {/if}
     {/if}
@@ -633,5 +641,34 @@
     color: rgba(80, 210, 180, 0.6);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+  }
+
+  .quality-method {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .method-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.25);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .method-value {
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    color: rgba(255, 180, 80, 0.7);
+  }
+
+  .method-value.is-visqol {
+    color: rgba(80, 210, 180, 0.8);
   }
 </style>

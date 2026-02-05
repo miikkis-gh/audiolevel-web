@@ -7,6 +7,11 @@
 import type { ContentType } from './analysis';
 
 /**
+ * Method used for perceptual quality measurement
+ */
+export type QualityMethod = 'visqol' | 'spectral_fallback';
+
+/**
  * Metrics measured on a processed candidate
  */
 export interface CandidateMetrics {
@@ -24,6 +29,9 @@ export interface CandidateMetrics {
 
   /** Signal-to-noise ratio estimate (dB) */
   snrEstimate: number;
+
+  /** Method used for quality measurement */
+  qualityMethod: QualityMethod;
 }
 
 /**
@@ -73,6 +81,9 @@ export interface EvaluationResult {
 
   /** Content type used for scoring weights */
   contentType: ContentType;
+
+  /** Method used for perceptual quality scoring */
+  qualityMethod: QualityMethod;
 }
 
 /**

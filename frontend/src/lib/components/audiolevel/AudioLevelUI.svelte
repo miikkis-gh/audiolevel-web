@@ -164,6 +164,7 @@
       processingApplied: report.processingApplied,
       candidatesTested: report.candidatesTested,
       winnerReason: report.winnerReason,
+      qualityMethod: report.qualityMethod,
     } : undefined;
 
     return {

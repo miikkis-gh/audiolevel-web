@@ -18,6 +18,7 @@ import type {
   EvaluationResult,
   EvaluationConfig,
   ScoringWeights,
+  QualityMethod,
 } from '../types/evaluation';
 import type { CandidateProcessingResult } from './candidateExecutor';
 
@@ -100,8 +101,11 @@ export async function evaluateCandidates(
     throw new Error('No candidates passed evaluation');
   }
 
+  // Get quality method from first candidate (same for all)
+  const qualityMethod = scores[0].metrics.qualityMethod;
+
   // Pick the winner
-  const winner = pickWinner(scores, contentType);
+  const winner = pickWinner(scores, contentType, qualityMethod);
 
   log.info({
     winnerId: winner.winnerId,
@@ -126,14 +130,15 @@ async function measureMetrics(
   const snrEstimate = await estimateSnr(processedPath);
 
   // Get ViSQOL score (or estimate if not available)
-  const visqolScore = await getVisqolScore(processedPath, originalPath);
+  const qualityResult = await getVisqolScore(processedPath, originalPath);
 
   return {
     integratedLufs: loudnessMetrics.integratedLufs,
     loudnessRange: loudnessMetrics.loudnessRange,
     truePeak: loudnessMetrics.truePeak,
-    visqolScore,
+    visqolScore: qualityResult.score,
     snrEstimate,
+    qualityMethod: qualityResult.method,
   };
 }
 
@@ -226,6 +231,14 @@ export async function checkVisqolAvailability(): Promise<boolean> {
 }
 
 /**
+ * Result of perceptual quality measurement
+ */
+interface QualityResult {
+  score: number;
+  method: QualityMethod;
+}
+
+/**
  * Get ViSQOL perceptual quality score
  *
  * ViSQOL compares processed vs original and returns MOS (1-5).
@@ -234,7 +247,7 @@ export async function checkVisqolAvailability(): Promise<boolean> {
 async function getVisqolScore(
   processedPath: string,
   originalPath: string
-): Promise<number> {
+): Promise<QualityResult> {
   // Check availability (cached after first check)
   const hasVisqol = await checkVisqolAvailability();
 
@@ -252,7 +265,7 @@ async function getVisqolScore(
         if (mosMatch) {
           const score = parseFloat(mosMatch[1]);
           log.debug({ processedPath, visqolScore: score }, 'ViSQOL score calculated');
-          return score;
+          return { score, method: 'visqol' };
         }
       }
     } catch (err) {
@@ -261,7 +274,8 @@ async function getVisqolScore(
   }
 
   // Fallback: spectral analysis-based quality estimate
-  return await estimatePerceptualQuality(processedPath, originalPath);
+  const score = await estimatePerceptualQuality(processedPath, originalPath);
+  return { score, method: 'spectral_fallback' };
 }
 
 /**
@@ -508,7 +522,7 @@ function scoreCandidate(
 /**
  * Pick the winning candidate
  */
-function pickWinner(scores: CandidateScore[], contentType: ContentType): EvaluationResult {
+function pickWinner(scores: CandidateScore[], contentType: ContentType, qualityMethod: QualityMethod): EvaluationResult {
   // Filter to candidates that passed safety
   const safe = scores.filter(s => s.passedSafety);
 
@@ -522,6 +536,7 @@ function pickWinner(scores: CandidateScore[], contentType: ContentType): Evaluat
         winnerReason: 'Fallback to conservative processing (other candidates failed safety checks)',
         candidates: scores,
         contentType,
+        qualityMethod,
       };
     }
     // Last resort: pick highest score regardless of safety
@@ -532,6 +547,7 @@ function pickWinner(scores: CandidateScore[], contentType: ContentType): Evaluat
       winnerReason: 'Best available option (no candidates fully passed safety)',
       candidates: scores,
       contentType,
+      qualityMethod,
     };
   }
 
@@ -551,6 +567,7 @@ function pickWinner(scores: CandidateScore[], contentType: ContentType): Evaluat
           winnerReason: 'Conservative processing preferred (scores within 5%)',
           candidates: scores,
           contentType,
+          qualityMethod,
         };
       }
     }
@@ -584,6 +601,7 @@ function pickWinner(scores: CandidateScore[], contentType: ContentType): Evaluat
     winnerReason: reasonText,
     candidates: scores,
     contentType,
+    qualityMethod,
   };
 }
 

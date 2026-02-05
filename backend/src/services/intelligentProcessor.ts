@@ -59,6 +59,8 @@ export interface ProcessingReport {
   processingApplied: string[];
   candidatesTested: { name: string; score: number; isWinner: boolean }[];
   winnerReason: string;
+  /** Method used for perceptual quality scoring ('visqol' or 'spectral_fallback') */
+  qualityMethod: 'visqol' | 'spectral_fallback';
   inputMetrics: {
     lufs: number;
     lra: number;
@@ -268,6 +270,7 @@ function buildProcessingReport(
       isWinner: c.candidateId === evaluation.winnerId,
     })),
     winnerReason: evaluation.winnerReason,
+    qualityMethod: evaluation.qualityMethod,
     inputMetrics: {
       lufs: analysis.metrics.integratedLufs,
       lra: analysis.metrics.loudnessRange,
