@@ -5,6 +5,7 @@
   import SingleReport from './SingleReport.svelte';
   import BatchReport from './BatchReport.svelte';
   import RatingToast from './RatingToast.svelte';
+  import AboutModal from './AboutModal.svelte';
   import {
     SINGLE_REPORT,
     MAX_BATCH,
@@ -48,6 +49,9 @@
   let zipping = $state(false);
   let rateLimitStatus = $state<RateLimitStatus | null>(null);
   let now = $state(Date.now());
+
+  // About modal state
+  let showAboutModal = $state(false);
 
   // Rating toast state
   let showRatingToast = $state(false);
@@ -860,7 +864,9 @@
     onchange={handleFileInput}
   />
 
-  <div class="branding">AudioLevel</div>
+  <button class="branding" onclick={() => showAboutModal = true} aria-label="About AudioLevel">
+    AudioLevel
+  </button>
 
   {#if rejectMsg}
     <div class="reject-msg">{rejectMsg}</div>
@@ -1150,6 +1156,12 @@
     onRate={handleRating}
     onDismiss={dismissRatingToast}
   />
+
+  <!-- About modal -->
+  <AboutModal
+    visible={showAboutModal}
+    onClose={() => showAboutModal = false}
+  />
 </div>
 
 <style>
@@ -1188,6 +1200,23 @@
     color: rgba(255, 255, 255, 0.28);
     user-select: none;
     z-index: 5;
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    margin: -4px -8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .branding:hover {
+    color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .branding:focus-visible {
+    outline: 2px solid rgba(80, 210, 180, 0.5);
+    outline-offset: 2px;
   }
 
   .reject-msg {
