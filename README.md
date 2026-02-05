@@ -1,268 +1,66 @@
 # AudioLevel
 
-**Professional Audio Normalization for Everyone**
+Drop audio files, get them normalized. No signup, no BS.
 
-A free, web-based audio normalization tool. Upload your audio, pick a preset, and download broadcast-ready files. No login required. No data retained.
+Automatically detects content type (music, speech, podcast), runs multiple processing strategies in parallel, picks the best result. Files delete after 15 minutes.
 
----
-
-## Features
-
-- **6 Industry Presets** — Podcast, Broadcast, YouTube, Streaming, Mastering, Audiobook
-- **Multi-Format Support** — WAV, MP3, FLAC, AAC, OGG input and output
-- **Real-Time Progress** — WebSocket-powered live updates during processing
-- **Privacy First** — All files auto-delete after 15 minutes
-- **No Account Needed** — Just upload and go
-- **Download History** — Session-based tracking of recent conversions
-
----
-
-## Quick Start
-
-### Using Docker (Recommended)
+## Run it
 
 ```bash
-# Clone the repository
-git clone https://github.com/miikkis-gh/audiolevel.git
-cd audiolevel
-
-# Start all services
+git clone https://github.com/miikkis-gh/audiolevel-web.git
+cd audiolevel-web
 docker compose up -d
-
-# Open in browser
-open http://localhost:80
 ```
 
-### Manual Setup
+Open http://localhost:8081
 
-```bash
-# Prerequisites: Bun, Redis, FFmpeg, ffmpeg-normalize
+## How it works
 
-# Backend
-cd backend
-bun install
-bun run dev
+1. Upload analyzes your audio (loudness, dynamics, spectral content)
+2. Classifies as music/speech/podcast based on silence ratio, spectral flatness, etc.
+3. Generates 4-6 processing candidates (conservative → aggressive)
+4. Runs them in parallel through FFmpeg
+5. Scores each result, picks the winner
+6. You download
 
-# Frontend (new terminal)
-cd frontend
-bun install
-bun run dev
-```
+Conservative processing wins ties. Less is more.
 
-Visit `http://localhost:5173` for the frontend.
+## Stack
 
----
+- **FFmpeg** + **SoX** - audio processing and analysis
+- **ViSQOL** - perceptual quality scoring (optional)
+- **Bun** + **Hono** - backend
+- **SvelteKit** - frontend
+- **Redis** + **BullMQ** - job queue
+- **WebGL** - that sphere thing
 
-## Presets
+## Config
 
-| Preset | Target LUFS | True Peak | Best For |
-|--------|-------------|-----------|----------|
-| Podcast | -16 | -1.5 dB | Spoken word, interviews |
-| Broadcast | -23 | -2.0 dB | TV/Radio (EBU R128) |
-| YouTube | -14 | -1.0 dB | YouTube uploads |
-| Streaming | -14 | -1.0 dB | Spotify, Apple Music |
-| Mastering | -9 | -0.3 dB | Loud, punchy masters |
-| Audiobook | -18 | -3.0 dB | ACX compliance |
-
----
-
-## Architecture
+Environment variables in `docker-compose.yml`:
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Browser   │────▶│   Frontend  │────▶│   Backend   │
-│             │◀────│   (Svelte)  │◀────│   (Hono)    │
-└─────────────┘     └─────────────┘     └──────┬──────┘
-                           │                   │
-                           │ WebSocket         │ Jobs
-                           ▼                   ▼
-                    ┌─────────────┐     ┌─────────────┐
-                    │   Nginx     │     │   BullMQ    │
-                    │  (optional) │     │   + Redis   │
-                    └─────────────┘     └──────┬──────┘
-                                               │
-                                               ▼
-                                        ┌─────────────┐
-                                        │   FFmpeg    │
-                                        │  Normalize  │
-                                        └─────────────┘
-```
-
----
-
-## Tech Stack
-
-**Backend**
-- [Bun](https://bun.sh) — Runtime
-- [Hono](https://hono.dev) — Web framework
-- [BullMQ](https://bullmq.io) — Job queue
-- [Redis](https://redis.io) — State & queue backend
-- [FFmpeg](https://ffmpeg.org) + ffmpeg-normalize — Audio processing
-
-**Frontend**
-- [Svelte 5](https://svelte.dev) — UI framework with runes
-- [Vite 7](https://vitejs.dev) — Build tool
-- [Tailwind CSS 4](https://tailwindcss.com) — CSS-first styling
-
----
-
-## API
-
-### Endpoints
-
-```
-POST   /api/upload              Upload audio file
-GET    /api/upload/job/:id      Get job status
-GET    /api/upload/job/:id/download  Download processed file
-GET    /api/presets             List available presets
-GET    /api/health              Health check
-WS     /ws                      Real-time progress updates
-```
-
-### WebSocket Events
-
-```javascript
-// Subscribe to job updates
-ws.send(JSON.stringify({ type: 'subscribe', jobId: 'abc123' }))
-
-// Receive progress
-{ type: 'progress', jobId: 'abc123', percent: 45, stage: 'normalizing' }
-
-// Receive completion
-{ type: 'complete', jobId: 'abc123', downloadUrl: '/api/upload/job/abc123/download' }
-```
-
-Full API documentation: [`docs/API.md`](docs/API.md)
-
----
-
-## Configuration
-
-### Environment Variables
-
-```env
-# Backend
-PORT=3000
-REDIS_URL=redis://localhost:6379
-UPLOAD_DIR=./uploads
-OUTPUT_DIR=./outputs
-MAX_FILE_SIZE=104857600          # 100MB
+MAX_FILE_SIZE=104857600      # 100MB
 FILE_RETENTION_MINUTES=15
 MAX_CONCURRENT_JOBS=4
-PROCESSING_TIMEOUT_MS=300000     # 5 minutes
-
-# Frontend
-VITE_API_URL=http://localhost:3000
-VITE_WS_URL=ws://localhost:3000/ws
+DISCORD_WEBHOOK_URL=...      # optional, for feedback
 ```
 
----
-
-## Reverse Proxy Configuration
-
-This application runs behind an nginx reverse proxy that handles SSL termination.
-
-**Host nginx configuration:**
-- Handles SSL/TLS (HTTPS on port 443)
-- Proxies requests to `http://localhost:8081`
-- Manages Let's Encrypt certificates
-
-**Docker nginx configuration:**
-- Serves HTTP only on port 80 (mapped to host port 8081)
-- No SSL configuration needed
-- No HTTPS redirects
-
----
-
-## Production Deployment
+## Dev
 
 ```bash
-# Using production compose file
-docker compose -f docker-compose.prod.yml up -d
+# backend
+cd backend && bun install && bun run dev
+
+# frontend
+cd frontend && bun install && bun run dev
 ```
 
-Deployment guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
-
----
-
-## Development
-
-```bash
-# Run tests
-cd backend && bun test
-cd frontend && bun test
-
-# Type checking
-cd backend && bun run typecheck
-cd frontend && bun run check
-
-# Build for production
-cd frontend && bun run build
-```
-
----
-
-## Project Structure
-
-```
-audiolevel/
-├── backend/
-│   ├── src/
-│   │   ├── index.ts         # Server entry
-│   │   ├── routes/          # API handlers
-│   │   ├── services/        # Business logic
-│   │   ├── workers/         # Job processors
-│   │   └── websocket/       # Real-time handlers
-│   └── package.json
-├── frontend/
-│   ├── src/
-│   │   ├── App.svelte       # Main component
-│   │   ├── app.css          # Tailwind CSS 4 theme
-│   │   ├── lib/components/
-│   │   │   ├── audiolevel/  # Audio processing UI
-│   │   │   │   ├── AudioLevelUI.svelte
-│   │   │   │   ├── ParticleSphere.svelte
-│   │   │   │   ├── BatchReport.svelte
-│   │   │   │   ├── SingleReport.svelte
-│   │   │   │   └── OverrideSelector.svelte
-│   │   │   └── ...          # Other components
-│   │   └── stores/          # State management
-│   └── package.json
-├── docs/                    # Documentation
-├── nginx/                   # Nginx config
-└── docker-compose.yml
-```
-
----
-
-## Limits
-
-| Resource | Limit |
-|----------|-------|
-| File size | 100 MB |
-| Uploads per hour | 10 per IP |
-| File retention | 15 minutes |
-| Processing timeout | 5 minutes |
-| Concurrent jobs | 4 |
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing`)
-5. Open a Pull Request
-
----
+Tests: `cd backend && bun test`
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT
 
 ---
 
-<p align="center">
-  <sub>Built with FFmpeg, Bun, and a love for good audio.</sub>
-</p>
+made by [miikkis](https://github.com/miikkis-gh)
