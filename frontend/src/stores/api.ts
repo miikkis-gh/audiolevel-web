@@ -188,7 +188,7 @@ export interface RatingPayload {
 
 export async function submitRating(payload: RatingPayload): Promise<void> {
   try {
-    const response = await fetch(`${API_URL}/api/rating`, {
+    const response = await fetch(`${API_URL}/api/upload/rating`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
