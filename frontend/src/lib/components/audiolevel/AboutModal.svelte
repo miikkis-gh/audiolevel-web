@@ -17,7 +17,6 @@
   const techStack = [
     { name: 'FFmpeg', role: 'The audio wizard doing all the heavy lifting', icon: '🎬', url: 'https://ffmpeg.org' },
     { name: 'SoX', role: 'Sound eXchange for spectral analysis', icon: '📊', url: 'https://sox.sourceforge.net' },
-    { name: 'ViSQOL', role: 'Perceptual quality scoring (when available)', icon: '👂', url: 'https://github.com/google/visqol' },
     { name: 'Bun', role: 'Speedy runtime for backend & frontend', icon: '🥟', url: 'https://bun.sh' },
     { name: 'Hono', role: 'Lightweight API framework', icon: '🔥', url: 'https://hono.dev' },
     { name: 'SvelteKit', role: 'Reactive UI with minimal overhead', icon: '🧡', url: 'https://svelte.dev' },

@@ -1,67 +1,8 @@
-# AudioLevel Backend with ViSQOL Support
+# AudioLevel Backend
 #
-# Multi-stage build:
-# 1. visqol-builder: Builds ViSQOL from source (can take 20-30 min first time)
-# 2. runtime: Final image with all dependencies
-#
-# For faster builds, pre-build the ViSQOL image:
-#   docker build -f Dockerfile.visqol-builder -t audiolevel-visqol-builder .
-# Then uncomment the line below and comment out the build section:
-#   FROM audiolevel-visqol-builder AS visqol-builder
+# Lightweight image with FFmpeg and SoX for audio processing.
+# ViSQOL is disabled - using spectral analysis fallback for quality scoring.
 
-# ============================================================================
-# Stage 1: Build ViSQOL (skip if using pre-built image)
-# ============================================================================
-FROM ubuntu:22.04 AS visqol-builder
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    wget \
-    ca-certificates \
-    build-essential \
-    python3 \
-    python3-pip \
-    pkg-config \
-    libarmadillo-dev \
-    libfftw3-dev \
-    libsndfile-dev \
-    && pip3 install numpy \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Bazelisk (auto-downloads correct Bazel version)
-RUN wget -q https://github.com/bazelbuild/bazelisk/releases/download/v1.19.0/bazelisk-linux-amd64 \
-    -O /usr/local/bin/bazel && chmod +x /usr/local/bin/bazel
-
-# Clone ViSQOL
-WORKDIR /build
-RUN git clone --depth 1 https://github.com/google/visqol.git
-
-# Build ViSQOL (suppress errors - build is optional)
-WORKDIR /build/visqol
-RUN bazel build :visqol -c opt 2>&1 || echo "ViSQOL build completed (may have warnings)"
-
-# Prepare output directory
-RUN mkdir -p /visqol-dist/model
-
-# Copy binary if build succeeded
-RUN if [ -f bazel-bin/visqol ]; then \
-        cp bazel-bin/visqol /visqol-dist/ && \
-        chmod +x /visqol-dist/visqol && \
-        echo "ViSQOL binary copied successfully"; \
-    else \
-        echo "ViSQOL build failed - spectral fallback will be used"; \
-    fi
-
-# Copy model files
-RUN cp -r model/* /visqol-dist/model/ 2>/dev/null || true
-
-
-# ============================================================================
-# Stage 2: Runtime Image
-# ============================================================================
 FROM oven/bun:1-debian AS runtime
 
 # Install runtime dependencies
@@ -75,28 +16,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && pip3 install --break-system-packages ffmpeg-normalize \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ViSQOL runtime dependencies (optional - package names vary by Debian version)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libarmadillo12 libfftw3-double3 2>/dev/null \
-    || apt-get install -y --no-install-recommends libarmadillo-dev libfftw3-dev 2>/dev/null \
-    || echo "ViSQOL runtime deps not found - will use spectral fallback" \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy ViSQOL from builder stage
-COPY --from=visqol-builder /visqol-dist/ /usr/local/visqol/
-
-# Set up ViSQOL symlink if binary exists
-RUN if [ -f /usr/local/visqol/visqol ]; then \
-        ln -sf /usr/local/visqol/visqol /usr/local/bin/visqol && \
-        echo "ViSQOL installed at /usr/local/bin/visqol"; \
-    else \
-        echo "ViSQOL not available - using spectral analysis fallback"; \
-    fi
-
-# Environment variables
-ENV VISQOL_PATH=/usr/local/bin/visqol
-ENV VISQOL_MODEL_PATH=/usr/local/visqol/model/libsvm_nu_svr_model.txt
-
 WORKDIR /app
 
 # Copy package files
@@ -109,7 +28,7 @@ RUN bun install --frozen-lockfile || bun install
 COPY . .
 
 # Create directories
-RUN mkdir -p uploads outputs
+RUN mkdir -p uploads outputs data
 
 # Expose port
 EXPOSE 3000
