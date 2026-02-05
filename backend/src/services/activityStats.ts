@@ -7,12 +7,14 @@ const KEYS = {
   TOTAL_DURATION: 'stats:total_duration', // in seconds
   DAILY_FILES: 'stats:daily:', // stats:daily:YYYY-MM-DD
   WEEKLY_FILES: 'stats:weekly:', // stats:weekly:YYYY-WW
+  HOURLY_FILES: 'stats:hourly:', // stats:hourly:YYYY-MM-DD-HH
   CONTENT_TYPE: 'stats:content_type:', // stats:content_type:music, stats:content_type:speech
   RECENT_ACTIVITY: 'stats:recent_activity', // list of recent activity events
 };
 
 const MAX_RECENT_ACTIVITY = 20;
 const ACTIVITY_TTL_SECONDS = 86400; // 24 hours
+const HOURLY_TTL_SECONDS = 43200; // 12 hours (keep enough for 6hr graph)
 
 export interface ActivityEvent {
   contentType: string;
@@ -53,6 +55,17 @@ function getWeeklyKey(): string {
 }
 
 /**
+ * Get hourly key (YYYY-MM-DD-HH)
+ */
+function getHourlyKey(date: Date = new Date()): string {
+  const yyyy = date.getFullYear();
+  const mm = (date.getMonth() + 1).toString().padStart(2, '0');
+  const dd = date.getDate().toString().padStart(2, '0');
+  const hh = date.getHours().toString().padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}-${hh}`;
+}
+
+/**
  * Normalize content type to category
  */
 function normalizeContentType(contentType: string): string {
@@ -74,6 +87,7 @@ export async function recordJobCompletion(
   const normalizedType = normalizeContentType(contentType);
   const dailyKey = getDailyKey();
   const weeklyKey = getWeeklyKey();
+  const hourlyKey = getHourlyKey();
 
   try {
     const pipeline = redis.pipeline();
@@ -83,11 +97,13 @@ export async function recordJobCompletion(
     pipeline.incrbyfloat(KEYS.TOTAL_DURATION, durationSeconds);
     pipeline.incr(`${KEYS.DAILY_FILES}${dailyKey}`);
     pipeline.incr(`${KEYS.WEEKLY_FILES}${weeklyKey}`);
+    pipeline.incr(`${KEYS.HOURLY_FILES}${hourlyKey}`);
     pipeline.incr(`${KEYS.CONTENT_TYPE}${normalizedType}`);
 
-    // Set TTL on daily/weekly keys (7 days for daily, 30 days for weekly)
-    pipeline.expire(`${KEYS.DAILY_FILES}${dailyKey}`, 604800);
-    pipeline.expire(`${KEYS.WEEKLY_FILES}${weeklyKey}`, 2592000);
+    // Set TTL on daily/weekly/hourly keys
+    pipeline.expire(`${KEYS.DAILY_FILES}${dailyKey}`, 604800); // 7 days
+    pipeline.expire(`${KEYS.WEEKLY_FILES}${weeklyKey}`, 2592000); // 30 days
+    pipeline.expire(`${KEYS.HOURLY_FILES}${hourlyKey}`, HOURLY_TTL_SECONDS);
 
     // Add to recent activity (capped list)
     const activityEvent: ActivityEvent = {
@@ -170,5 +186,46 @@ export async function getActivityStats(): Promise<ActivityStats> {
       contentBreakdown: { music: 0, speech: 0, podcast: 0, other: 0 },
       recentActivity: [],
     };
+  }
+}
+
+export interface HourlyDataPoint {
+  hour: string; // HH:00 format
+  count: number;
+}
+
+/**
+ * Get hourly activity for the last N hours
+ */
+export async function getHourlyActivity(hours: number = 6): Promise<HourlyDataPoint[]> {
+  const redis = getRedisClient();
+  const now = new Date();
+  const dataPoints: HourlyDataPoint[] = [];
+
+  try {
+    // Generate keys for the last N hours
+    const keys: string[] = [];
+    const labels: string[] = [];
+
+    for (let i = hours - 1; i >= 0; i--) {
+      const date = new Date(now.getTime() - i * 60 * 60 * 1000);
+      keys.push(`${KEYS.HOURLY_FILES}${getHourlyKey(date)}`);
+      labels.push(`${date.getHours().toString().padStart(2, '0')}:00`);
+    }
+
+    // Fetch all counts in parallel
+    const counts = await Promise.all(keys.map((key) => redis.get(key)));
+
+    for (let i = 0; i < labels.length; i++) {
+      dataPoints.push({
+        hour: labels[i],
+        count: parseInt(counts[i] || '0', 10),
+      });
+    }
+
+    return dataPoints;
+  } catch (err) {
+    logger.error({ err }, 'Failed to get hourly activity');
+    return [];
   }
 }

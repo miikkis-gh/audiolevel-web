@@ -9,6 +9,7 @@
 
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
+import { getHourlyActivity, getActivityStats } from './activityStats';
 
 interface DiscordEmbed {
   title: string;
@@ -137,4 +138,117 @@ export async function notifyAlert(
   };
 
   await sendEmbed(embed);
+}
+
+/**
+ * Generate QuickChart URL for activity graph
+ */
+function generateChartUrl(labels: string[], data: number[]): string {
+  const chartConfig = {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Files Processed',
+          data,
+          backgroundColor: 'rgba(80, 210, 180, 0.7)',
+          borderColor: 'rgba(80, 210, 180, 1)',
+          borderWidth: 1,
+        },
+      ],
+    },
+    options: {
+      plugins: {
+        title: {
+          display: true,
+          text: 'Activity - Last 6 Hours',
+          color: '#ffffff',
+          font: { size: 16 },
+        },
+        legend: { display: false },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#cccccc' },
+          grid: { color: 'rgba(255,255,255,0.1)' },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#cccccc', stepSize: 1 },
+          grid: { color: 'rgba(255,255,255,0.1)' },
+        },
+      },
+    },
+  };
+
+  const encoded = encodeURIComponent(JSON.stringify(chartConfig));
+  return `https://quickchart.io/chart?c=${encoded}&backgroundColor=%230f0f1a&width=600&height=300`;
+}
+
+/**
+ * Format duration in human readable format
+ */
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.round((seconds % 3600) / 60);
+  return `${hours}h ${mins}m`;
+}
+
+/**
+ * Post 6-hour activity report with chart to Discord
+ */
+export async function postActivityReport(): Promise<void> {
+  const webhookUrl = env.DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) {
+    return;
+  }
+
+  try {
+    // Get activity data
+    const [hourlyData, stats] = await Promise.all([
+      getHourlyActivity(6),
+      getActivityStats(),
+    ]);
+
+    const labels = hourlyData.map((d) => d.hour);
+    const data = hourlyData.map((d) => d.count);
+    const totalInPeriod = data.reduce((sum, n) => sum + n, 0);
+
+    // Generate chart URL
+    const chartUrl = generateChartUrl(labels, data);
+
+    // Build embed with image
+    const embed = {
+      title: '📊 Activity Report',
+      color: 0x50d2b4, // Teal
+      image: { url: chartUrl },
+      fields: [
+        { name: 'Last 6 Hours', value: String(totalInPeriod), inline: true },
+        { name: 'Today', value: String(stats.todayFiles), inline: true },
+        { name: 'This Week', value: String(stats.weekFiles), inline: true },
+        { name: 'Total Files', value: String(stats.totalFiles), inline: true },
+        { name: 'Total Duration', value: formatDuration(stats.totalDurationSeconds), inline: true },
+        {
+          name: 'Content Mix',
+          value: `🎵 ${stats.contentBreakdown.music} | 🎙️ ${stats.contentBreakdown.speech} | 🎧 ${stats.contentBreakdown.podcast}`,
+          inline: true,
+        },
+      ],
+      footer: { text: 'AudioLevel Stats' },
+      timestamp: new Date().toISOString(),
+    };
+
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ embeds: [embed] }),
+    });
+
+    logger.info('Posted activity report to Discord');
+  } catch (err) {
+    logger.error({ err }, 'Failed to post activity report to Discord');
+  }
 }

@@ -4,9 +4,11 @@ import { join, basename } from 'path';
 import { env } from '../config/env';
 import { logger, createChildLogger } from '../utils/logger';
 import { getAudioQueue } from './queue';
+import { postActivityReport } from './discordNotifier';
 
 let cleanupTask: cron.ScheduledTask | null = null;
 let orphanCleanupTask: cron.ScheduledTask | null = null;
+let activityReportTask: cron.ScheduledTask | null = null;
 
 // Minimum age before a file is considered potentially orphaned (5 minutes)
 const ORPHAN_MIN_AGE_MS = 5 * 60 * 1000;
@@ -281,9 +283,14 @@ export function startCleanupJob(): void {
     await runOrphanCleanup();
   });
 
+  // Activity report: Run every 6 hours (at 00:00, 06:00, 12:00, 18:00)
+  activityReportTask = cron.schedule('0 */6 * * *', async () => {
+    await postActivityReport();
+  });
+
   logger.info(
     { retentionMinutes: env.FILE_RETENTION_MINUTES },
-    'File cleanup jobs started (age-based: 5min, orphan: 10min)'
+    'Scheduled jobs started (cleanup: 5min, orphan: 10min, activity report: 6h)'
   );
 
   // Run initial cleanup
@@ -302,5 +309,9 @@ export function stopCleanupJob(): void {
     orphanCleanupTask.stop();
     orphanCleanupTask = null;
   }
-  logger.info('File cleanup jobs stopped');
+  if (activityReportTask) {
+    activityReportTask.stop();
+    activityReportTask = null;
+  }
+  logger.info('Scheduled jobs stopped');
 }
