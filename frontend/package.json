@@ -1,6 +1,14 @@
 {
   "name": "audiolevel-frontend",
   "version": "1.0.0",
+  "description": "Web UI for audio normalization with drag-and-drop upload and real-time processing visualization",
+  "keywords": ["audio", "normalization", "svelte", "webgl", "audio-tools", "loudness-normalization"],
+  "author": "miikkis",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/miikkis-gh/audiolevel-web"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite dev",

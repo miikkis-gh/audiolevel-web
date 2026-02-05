@@ -1,6 +1,8 @@
 # AudioLevel
 
-Drop audio files, get them normalized. No signup, no BS.
+Web-based audio normalization tool. LUFS loudness normalization for music, podcasts, and speech.
+
+Drop files, get broadcast-ready audio. No signup, no BS.
 
 Automatically detects content type (music, speech, podcast), runs multiple processing strategies in parallel, picks the best result. Files delete after 15 minutes.
 

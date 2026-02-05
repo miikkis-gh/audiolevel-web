@@ -1,5 +1,26 @@
 {
   "name": "audiolevel",
+  "version": "1.0.0",
+  "description": "Free online audio normalization tool. Automatic LUFS loudness normalization for music, podcasts, voiceover, and audiobooks.",
+  "keywords": [
+    "audio-normalization",
+    "loudness-normalization",
+    "lufs",
+    "audio-processing",
+    "ffmpeg",
+    "podcast-audio",
+    "music-mastering",
+    "broadcast-audio",
+    "audio-leveling",
+    "web-audio-tool"
+  ],
+  "author": "miikkis",
+  "license": "MIT",
+  "homepage": "https://github.com/miikkis-gh/audiolevel-web",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/miikkis-gh/audiolevel-web"
+  },
   "private": true,
   "type": "module",
   "scripts": {

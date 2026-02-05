@@ -1,6 +1,14 @@
 {
   "name": "audiolevel-backend",
   "version": "1.0.0",
+  "description": "Audio normalization API with FFmpeg, intelligent content detection, and parallel processing",
+  "keywords": ["audio", "normalization", "loudness", "lufs", "ffmpeg", "audio-processing", "podcast", "music", "mastering"],
+  "author": "miikkis",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/miikkis-gh/audiolevel-web"
+  },
   "type": "module",
   "scripts": {
     "dev": "bun run --hot src/index.ts",
