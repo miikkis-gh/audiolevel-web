@@ -41,7 +41,10 @@ describe('API Store', () => {
       // Verify FormData contents
       const call = vi.mocked(fetch).mock.calls[0];
       const formData = call[1]?.body as FormData;
-      expect(formData.get('file')).toBe(file);
+      const uploadedFile = formData.get('file') as File;
+      expect(uploadedFile).toBeInstanceOf(File);
+      expect(uploadedFile.name).toBe('test.mp3');
+      expect(uploadedFile.type).toBe('audio/mpeg');
 
       expect(result).toEqual(mockResponse);
     });
