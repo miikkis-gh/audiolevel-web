@@ -1476,16 +1476,14 @@
     left: 0;
     right: 0;
     text-align: center;
-    opacity: 0;
-    transform: translateY(8px);
-    transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+    display: none;
     pointer-events: none;
   }
 
   .info-content.active {
-    opacity: 1;
-    transform: translateY(0);
+    display: block;
     pointer-events: auto;
+    animation: fadeUp 0.4s ease-out;
   }
 
   .idle-label {

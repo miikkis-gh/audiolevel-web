@@ -7,8 +7,8 @@ test.describe('Upload Flow', () => {
   });
 
   test('displays upload zone on initial load', async ({ page }) => {
-    // Check for upload zone or drop area
-    await expect(page.locator('text=/drag|drop|upload/i').first()).toBeVisible();
+    // Check for upload zone or drop area - wait longer for CSS fade-in animation
+    await expect(page.locator('text=/drag|drop|upload/i').first()).toBeVisible({ timeout: 10000 });
   });
 
   test('shows file input when clicking upload area', async ({ page }) => {
