@@ -61,6 +61,8 @@ export interface ProcessingReport {
   winnerReason: string;
   /** Method used for perceptual quality scoring ('visqol' or 'spectral_fallback') */
   qualityMethod: 'visqol' | 'spectral_fallback';
+  /** Genre guess for music content */
+  genreGuess?: { broad: string; confidence: 'low' | 'medium' | 'high' };
   inputMetrics: {
     lufs: number;
     lra: number;
@@ -272,6 +274,7 @@ function buildProcessingReport(
     })),
     winnerReason: evaluation.winnerReason,
     qualityMethod: evaluation.qualityMethod,
+    genreGuess: analysis.genreGuess,
     inputMetrics: {
       lufs: analysis.metrics.integratedLufs,
       lra: analysis.metrics.loudnessRange,
