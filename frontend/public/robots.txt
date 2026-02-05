@@ -1,0 +1,9 @@
+# AudioLevel robots.txt
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://audiolevel.miikkis.fi/sitemap.xml
+
+# Block API endpoints from indexing
+Disallow: /api/
