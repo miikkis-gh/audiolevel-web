@@ -6,6 +6,7 @@
   import BatchReport from './BatchReport.svelte';
   import RatingToast from './RatingToast.svelte';
   import AboutModal from './AboutModal.svelte';
+  import ActivityPanel from './ActivityPanel.svelte';
   import {
     SINGLE_REPORT,
     MAX_BATCH,
@@ -27,6 +28,7 @@
     clearJobData,
     jobProgress,
     jobResults,
+    getWsUrl,
   } from '../../../stores/websocket';
 
   // State
@@ -992,6 +994,13 @@
             Process another
           </button>
         </div>
+        {#if showRatingToast}
+          <RatingToast
+            visible={showRatingToast}
+            onRate={handleRating}
+            onDismiss={dismissRatingToast}
+          />
+        {/if}
       </div>
     {/if}
 
@@ -1065,6 +1074,13 @@
             Process another
           </button>
         </div>
+        {#if showRatingToast}
+          <RatingToast
+            visible={showRatingToast}
+            onRate={handleRating}
+            onDismiss={dismissRatingToast}
+          />
+        {/if}
       </div>
     {/if}
   </div>
@@ -1152,18 +1168,14 @@
     {/if}
   </div>
 
-  <!-- Rating toast -->
-  <RatingToast
-    visible={showRatingToast}
-    onRate={handleRating}
-    onDismiss={dismissRatingToast}
-  />
-
   <!-- About modal -->
   <AboutModal
     visible={showAboutModal}
     onClose={() => showAboutModal = false}
   />
+
+  <!-- Activity panel -->
+  <ActivityPanel wsUrl={getWsUrl()} />
 </div>
 
 <style>

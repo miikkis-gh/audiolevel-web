@@ -19,6 +19,7 @@ import {
 } from './websocket/handler';
 import healthRoutes from './routes/health';
 import uploadRoutes from './routes/upload';
+import statsRoutes from './routes/stats';
 
 import { AppError, ERROR_MESSAGES } from './middleware/errorHandler';
 
@@ -80,6 +81,7 @@ app.use(
 // Routes
 app.route('/api/health', healthRoutes);
 app.route('/api/upload', uploadRoutes);
+app.route('/api/stats', statsRoutes);
 
 // Job status route (alias for convenience)
 app.get('/api/job/:id', async (c) => {
@@ -95,6 +97,7 @@ app.get('/', (c) => {
     endpoints: {
       health: '/api/health',
       upload: '/api/upload',
+      stats: '/api/stats',
       jobStatus: '/api/job/:id',
       download: '/api/job/:id/download',
       websocket: '/ws',
@@ -151,6 +154,7 @@ export default {
         data: {
           sessionId: '',
           subscribedJobs: new Set<string>(),
+          subscribedActivity: false,
           lastPing: Date.now(),
         },
       });

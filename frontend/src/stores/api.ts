@@ -205,3 +205,32 @@ export async function submitRating(payload: RatingPayload): Promise<void> {
     console.warn('Rating submission error:', err);
   }
 }
+
+export interface ActivityEvent {
+  contentType: string;
+  timestamp: number;
+}
+
+export interface ActivityStats {
+  totalFiles: number;
+  totalDurationSeconds: number;
+  todayFiles: number;
+  weekFiles: number;
+  contentBreakdown: {
+    music: number;
+    speech: number;
+    podcast: number;
+    other: number;
+  };
+  recentActivity: ActivityEvent[];
+  activeUsers: number;
+}
+
+export async function fetchActivityStats(): Promise<ActivityStats> {
+  const response = await fetch(`${API_URL}/api/stats`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch activity stats');
+  }
+  const data = await response.json();
+  return data.stats;
+}

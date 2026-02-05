@@ -6,6 +6,8 @@ export const WS_MESSAGE_TYPES = {
   // Client -> Server
   SUBSCRIBE: 'subscribe',
   UNSUBSCRIBE: 'unsubscribe',
+  SUBSCRIBE_ACTIVITY: 'subscribe_activity',
+  UNSUBSCRIBE_ACTIVITY: 'unsubscribe_activity',
   PING: 'ping',
 
   // Server -> Client
@@ -15,6 +17,9 @@ export const WS_MESSAGE_TYPES = {
   PONG: 'pong',
   SUBSCRIBED: 'subscribed',
   UNSUBSCRIBED: 'unsubscribed',
+  ACTIVITY: 'activity',
+  ACTIVITY_SUBSCRIBED: 'activity_subscribed',
+  ACTIVITY_UNSUBSCRIBED: 'activity_unsubscribed',
 } as const;
 
 // Client -> Server message schemas
@@ -32,9 +37,19 @@ export const pingMessageSchema = z.object({
   type: z.literal(WS_MESSAGE_TYPES.PING),
 });
 
+export const subscribeActivityMessageSchema = z.object({
+  type: z.literal(WS_MESSAGE_TYPES.SUBSCRIBE_ACTIVITY),
+});
+
+export const unsubscribeActivityMessageSchema = z.object({
+  type: z.literal(WS_MESSAGE_TYPES.UNSUBSCRIBE_ACTIVITY),
+});
+
 export const clientMessageSchema = z.discriminatedUnion('type', [
   subscribeMessageSchema,
   unsubscribeMessageSchema,
+  subscribeActivityMessageSchema,
+  unsubscribeActivityMessageSchema,
   pingMessageSchema,
 ]);
 
@@ -90,13 +105,30 @@ export interface UnsubscribedMessage {
   jobId: string;
 }
 
+export interface ActivityMessage {
+  type: typeof WS_MESSAGE_TYPES.ACTIVITY;
+  contentType: string;
+  timestamp: number;
+}
+
+export interface ActivitySubscribedMessage {
+  type: typeof WS_MESSAGE_TYPES.ACTIVITY_SUBSCRIBED;
+}
+
+export interface ActivityUnsubscribedMessage {
+  type: typeof WS_MESSAGE_TYPES.ACTIVITY_UNSUBSCRIBED;
+}
+
 export type ServerMessage =
   | ProgressMessage
   | CompleteMessage
   | ErrorMessage
   | PongMessage
   | SubscribedMessage
-  | UnsubscribedMessage;
+  | UnsubscribedMessage
+  | ActivityMessage
+  | ActivitySubscribedMessage
+  | ActivityUnsubscribedMessage;
 
 // Helper functions to create server messages
 export function createProgressMessage(
@@ -161,5 +193,25 @@ export function createUnsubscribedMessage(jobId: string): UnsubscribedMessage {
   return {
     type: WS_MESSAGE_TYPES.UNSUBSCRIBED,
     jobId,
+  };
+}
+
+export function createActivityMessage(contentType: string): ActivityMessage {
+  return {
+    type: WS_MESSAGE_TYPES.ACTIVITY,
+    contentType,
+    timestamp: Date.now(),
+  };
+}
+
+export function createActivitySubscribedMessage(): ActivitySubscribedMessage {
+  return {
+    type: WS_MESSAGE_TYPES.ACTIVITY_SUBSCRIBED,
+  };
+}
+
+export function createActivityUnsubscribedMessage(): ActivityUnsubscribedMessage {
+  return {
+    type: WS_MESSAGE_TYPES.ACTIVITY_UNSUBSCRIBED,
   };
 }

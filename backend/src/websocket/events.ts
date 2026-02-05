@@ -1,10 +1,12 @@
-import { broadcastToJob } from './handler';
+import { broadcastToJob, broadcastActivity } from './handler';
 import {
   createProgressMessage,
   createCompleteMessage,
   createErrorMessage,
+  createActivityMessage,
   type ProcessingReportMessage,
 } from './types';
+import { recordJobCompletion } from '../services/activityStats';
 import { logger } from '../utils/logger';
 
 /**
@@ -30,6 +32,18 @@ export function emitJobComplete(
 ): void {
   logger.info({ jobId, downloadUrl: options.downloadUrl, duration: options.duration }, 'Emitting job completion');
   broadcastToJob(jobId, createCompleteMessage(jobId, options.downloadUrl, options));
+
+  // Record stats and broadcast activity
+  const contentType = options.processingReport?.contentType || 'unknown';
+  const durationSeconds = options.duration || 0;
+
+  // Fire and forget - don't block on stats
+  recordJobCompletion(contentType, durationSeconds).catch((err) => {
+    logger.error({ err }, 'Failed to record job completion stats');
+  });
+
+  // Broadcast to activity subscribers
+  broadcastActivity(createActivityMessage(contentType));
 }
 
 /**

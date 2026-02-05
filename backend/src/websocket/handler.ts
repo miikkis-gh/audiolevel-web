@@ -7,6 +7,8 @@ import {
   createSubscribedMessage,
   createUnsubscribedMessage,
   createErrorMessage,
+  createActivitySubscribedMessage,
+  createActivityUnsubscribedMessage,
   type ServerMessage,
   type ClientMessage,
 } from './types';
@@ -14,6 +16,7 @@ import {
 export interface WebSocketData {
   sessionId: string;
   subscribedJobs: Set<string>;
+  subscribedActivity: boolean;
   lastPing: number;
 }
 
@@ -22,6 +25,9 @@ const connections = new Map<string, ServerWebSocket<WebSocketData>>();
 
 // Job subscriptions: jobId -> Set of sessionIds
 const jobSubscriptions = new Map<string, Set<string>>();
+
+// Activity subscribers: Set of sessionIds
+const activitySubscribers = new Set<string>();
 
 // Using constants from config
 const HEARTBEAT_INTERVAL = WEBSOCKET.HEARTBEAT_INTERVAL_MS;
@@ -45,6 +51,7 @@ export function handleOpen(ws: ServerWebSocket<WebSocketData>): void {
   ws.data = {
     sessionId,
     subscribedJobs: new Set(),
+    subscribedActivity: false,
     lastPing: Date.now(),
   };
 
@@ -80,6 +87,12 @@ export function handleMessage(
         break;
       case 'unsubscribe':
         handleUnsubscribe(ws, msg.jobId);
+        break;
+      case 'subscribe_activity':
+        handleSubscribeActivity(ws);
+        break;
+      case 'unsubscribe_activity':
+        handleUnsubscribeActivity(ws);
         break;
       case 'ping':
         ws.data.lastPing = Date.now();
@@ -141,6 +154,32 @@ function handleUnsubscribe(ws: ServerWebSocket<WebSocketData>, jobId: string): v
 }
 
 /**
+ * Handle subscribe to activity feed
+ */
+function handleSubscribeActivity(ws: ServerWebSocket<WebSocketData>): void {
+  const log = createChildLogger({ sessionId: ws.data.sessionId });
+
+  ws.data.subscribedActivity = true;
+  activitySubscribers.add(ws.data.sessionId);
+
+  log.debug('Client subscribed to activity feed');
+  sendMessage(ws, createActivitySubscribedMessage());
+}
+
+/**
+ * Handle unsubscribe from activity feed
+ */
+function handleUnsubscribeActivity(ws: ServerWebSocket<WebSocketData>): void {
+  const log = createChildLogger({ sessionId: ws.data.sessionId });
+
+  ws.data.subscribedActivity = false;
+  activitySubscribers.delete(ws.data.sessionId);
+
+  log.debug('Client unsubscribed from activity feed');
+  sendMessage(ws, createActivityUnsubscribedMessage());
+}
+
+/**
  * Handle WebSocket close
  */
 export function handleClose(ws: ServerWebSocket<WebSocketData>): void {
@@ -158,6 +197,9 @@ export function handleClose(ws: ServerWebSocket<WebSocketData>): void {
       }
     }
   }
+
+  // Clean up activity subscription
+  activitySubscribers.delete(sessionId);
 
   // Remove from connections
   connections.delete(sessionId);
@@ -258,7 +300,34 @@ export function closeAllConnections(): void {
   }
   connections.clear();
   jobSubscriptions.clear();
+  activitySubscribers.clear();
   logger.info('All WebSocket connections closed');
+}
+
+/**
+ * Broadcast a message to all activity subscribers
+ */
+export function broadcastActivity(message: ServerMessage): void {
+  if (activitySubscribers.size === 0) {
+    return;
+  }
+
+  const messageStr = JSON.stringify(message);
+  let sentCount = 0;
+
+  for (const sessionId of activitySubscribers) {
+    const ws = connections.get(sessionId);
+    if (ws) {
+      try {
+        ws.send(messageStr);
+        sentCount++;
+      } catch (err) {
+        logger.error({ sessionId, err }, 'Failed to broadcast activity message');
+      }
+    }
+  }
+
+  logger.debug({ subscriberCount: activitySubscribers.size, sentCount }, 'Broadcast activity message');
 }
 
 /**
@@ -268,6 +337,7 @@ export function getConnectionStats(): {
   totalConnections: number;
   activeSubscriptions: number;
   jobsWithSubscribers: number;
+  activitySubscribers: number;
 } {
   let activeSubscriptions = 0;
   for (const subscribers of jobSubscriptions.values()) {
@@ -278,5 +348,6 @@ export function getConnectionStats(): {
     totalConnections: connections.size,
     activeSubscriptions,
     jobsWithSubscribers: jobSubscriptions.size,
+    activitySubscribers: activitySubscribers.size,
   };
 }

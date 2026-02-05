@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-
   interface Props {
     visible: boolean;
     onRate: (rating: 'up' | 'down') => void;
@@ -9,39 +7,19 @@
 
   let { visible, onRate, onDismiss }: Props = $props();
 
-  let dismissTimer: ReturnType<typeof setTimeout> | null = null;
   let isExiting = $state(false);
 
-  // Auto-dismiss after 10 seconds
   $effect(() => {
     if (visible) {
       isExiting = false;
-      dismissTimer = setTimeout(() => {
-        handleDismiss();
-      }, 10000);
     }
-
-    return () => {
-      if (dismissTimer) {
-        clearTimeout(dismissTimer);
-        dismissTimer = null;
-      }
-    };
   });
 
   function handleRate(rating: 'up' | 'down') {
-    if (dismissTimer) {
-      clearTimeout(dismissTimer);
-      dismissTimer = null;
-    }
     onRate(rating);
   }
 
   function handleDismiss() {
-    if (dismissTimer) {
-      clearTimeout(dismissTimer);
-      dismissTimer = null;
-    }
     isExiting = true;
     setTimeout(() => {
       onDismiss();
@@ -77,22 +55,20 @@
 
 <style>
   .rating-toast {
-    position: fixed;
-    bottom: 70px;
-    right: 24px;
     background: rgba(16, 20, 32, 0.96);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 16px;
     padding: 16px 20px;
-    z-index: 150;
-    animation: slideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: fadeIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    margin-top: 16px;
+    display: inline-block;
   }
 
   .rating-toast.exiting {
-    animation: slideOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: fadeOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   }
 
   .toast-close {
@@ -175,25 +151,25 @@
     color: rgba(255, 120, 120, 1);
   }
 
-  @keyframes slideIn {
+  @keyframes fadeIn {
     from {
       opacity: 0;
-      transform: translateX(20px) translateY(10px);
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
-      transform: translateX(0) translateY(0);
+      transform: translateY(0);
     }
   }
 
-  @keyframes slideOut {
+  @keyframes fadeOut {
     from {
       opacity: 1;
-      transform: translateX(0) translateY(0);
+      transform: translateY(0);
     }
     to {
       opacity: 0;
-      transform: translateX(20px) translateY(10px);
+      transform: translateY(8px);
     }
   }
 </style>

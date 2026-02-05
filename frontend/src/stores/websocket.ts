@@ -336,6 +336,15 @@ class WebSocketClient {
 // Singleton instance
 let wsClient: WebSocketClient | null = null;
 
+export function getWsUrl(): string {
+  let wsUrl = import.meta.env.VITE_WS_URL;
+  if (!wsUrl) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    wsUrl = `${protocol}//${window.location.host}/ws`;
+  }
+  return wsUrl;
+}
+
 export function getWebSocketClient(): WebSocketClient {
   if (!wsClient) {
     // Use environment variable if set, otherwise construct from current location
