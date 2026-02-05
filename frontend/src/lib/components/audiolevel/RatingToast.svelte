@@ -78,7 +78,7 @@
 <style>
   .rating-toast {
     position: fixed;
-    bottom: 60px;
+    bottom: 70px;
     right: 24px;
     background: rgba(16, 20, 32, 0.96);
     backdrop-filter: blur(20px);
@@ -86,7 +86,7 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 16px;
     padding: 16px 20px;
-    z-index: 100;
+    z-index: 150;
     animation: slideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   }

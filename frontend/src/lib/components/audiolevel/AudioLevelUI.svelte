@@ -664,11 +664,11 @@
   function handleDownload() {
     if (currentJobId && currentDownloadUrl) {
       triggerDownload(currentDownloadUrl, fileName);
-      showRatingToastAfterDownload(currentJobId, fileName, singleReport);
     } else if (currentJobId) {
       triggerDownload(getDownloadUrl(currentJobId), fileName);
-      showRatingToastAfterDownload(currentJobId, fileName, singleReport);
     }
+    // Always show rating toast after download attempt
+    showRatingToastAfterDownload(currentJobId || 'unknown', fileName || 'file', singleReport);
   }
 
   function handleBatchDownload(index?: number) {
@@ -1199,7 +1199,7 @@
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.28);
     user-select: none;
-    z-index: 5;
+    z-index: 60;
     background: none;
     border: none;
     padding: 4px 8px;
@@ -1207,6 +1207,7 @@
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
+    pointer-events: auto;
   }
 
   .branding:hover {
