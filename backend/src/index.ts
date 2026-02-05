@@ -21,6 +21,7 @@ import healthRoutes from './routes/health';
 import uploadRoutes from './routes/upload';
 import statsRoutes from './routes/stats';
 import { checkVisqolAvailability } from './services/audioEvaluator';
+import { notifyServerError, notifyServerStart } from './services/discordNotifier';
 
 import { AppError, ERROR_MESSAGES } from './middleware/errorHandler';
 
@@ -41,6 +42,13 @@ app.onError((err, c) => {
   }
 
   logger.error({ err }, 'Unhandled error');
+
+  // Send Discord notification for unhandled errors (fire-and-forget)
+  notifyServerError(err, {
+    endpoint: c.req.path,
+    method: c.req.method,
+  });
+
   return c.json(
     {
       error: 'An unexpected error occurred',
@@ -124,6 +132,9 @@ async function initializeServices() {
   startHeartbeat();
 
   logger.info({ port: env.PORT, env: env.NODE_ENV }, 'AudioLevel server initialized');
+
+  // Send Discord notification on startup (useful for monitoring restarts)
+  await notifyServerStart();
 }
 
 // Graceful shutdown

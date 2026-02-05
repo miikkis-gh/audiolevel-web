@@ -2,6 +2,7 @@ import { Worker, Job } from 'bullmq';
 import { getRedisClient } from '../services/redis';
 import { verifyDependencies } from '../services/audioProcessor';
 import { runIntelligentProcessing } from '../services/intelligentProcessor';
+import { notifyJobFailure } from '../services/discordNotifier';
 import { env } from '../config/env';
 import { logger, createChildLogger } from '../utils/logger';
 import { emitJobProgress, emitJobComplete, emitJobError } from '../websocket/events';
@@ -243,6 +244,14 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
     // Emit WebSocket event for error
     if (job) {
       emitJobError(job.data.jobId, err.message, 'PROCESSING_FAILED');
+
+      // Send Discord notification (fire-and-forget)
+      notifyJobFailure(
+        job.data.jobId,
+        job.data.originalName,
+        err.message,
+        job.attemptsMade
+      );
     }
   });
 
