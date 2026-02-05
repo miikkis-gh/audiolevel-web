@@ -394,4 +394,38 @@
     color: rgba(255, 255, 255, 0.35);
     white-space: nowrap;
   }
+
+  /* Mobile responsiveness - Tablet */
+  @media (max-width: 768px) {
+    .activity-panel {
+      bottom: 60px;
+      left: 12px;
+      min-width: 160px;
+      max-width: 220px;
+    }
+
+    .panel-header {
+      padding: 8px 12px;
+      font-size: 11px;
+    }
+
+    .panel-content {
+      padding: 0 12px 12px;
+    }
+
+    .stat-value {
+      font-size: 12px;
+    }
+
+    .stat-label {
+      font-size: 8px;
+    }
+  }
+
+  /* Mobile responsiveness - Small screens (hide panel) */
+  @media (max-width: 480px) {
+    .activity-panel {
+      display: none;
+    }
+  }
 </style>

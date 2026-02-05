@@ -1759,4 +1759,152 @@
     height: 12px;
     background: rgba(255, 255, 255, 0.15);
   }
+
+  /* Mobile responsiveness - Tablet */
+  @media (max-width: 768px) {
+    .sphere-container {
+      transform: scale(0.9);
+    }
+
+    .branding {
+      top: 16px;
+      left: 16px;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+    }
+
+    .report-trigger {
+      bottom: 70px;
+      right: 12px;
+      padding: 8px 14px;
+      font-size: 10px;
+    }
+
+    .report-panel {
+      bottom: 12px;
+      right: 12px;
+      left: 12px;
+      width: auto;
+      max-width: none;
+      padding: 20px;
+      border-radius: 16px;
+    }
+
+    .progress-num {
+      font-size: 40px;
+    }
+
+    .idle-label {
+      font-size: 15px;
+    }
+
+    .explainer {
+      font-size: 12px;
+      padding: 0 20px;
+    }
+
+    .status-bar {
+      padding: 8px 12px;
+      gap: 12px;
+      font-size: 10px;
+    }
+
+    .status-item {
+      gap: 6px;
+    }
+  }
+
+  /* Mobile responsiveness - Small screens */
+  @media (max-width: 480px) {
+    .sphere-container {
+      transform: scale(0.8);
+    }
+
+    .branding {
+      top: 12px;
+      left: 12px;
+      font-size: 10px;
+      letter-spacing: 1px;
+    }
+
+    .branding-dot {
+      width: 5px;
+      height: 5px;
+    }
+
+    .report-trigger {
+      bottom: 60px;
+      right: 8px;
+      padding: 6px 12px;
+      font-size: 9px;
+      border-radius: 14px;
+    }
+
+    .report-panel {
+      bottom: 8px;
+      right: 8px;
+      left: 8px;
+      padding: 16px;
+      border-radius: 14px;
+      max-height: calc(100vh - 80px);
+    }
+
+    .progress-num {
+      font-size: 36px;
+      min-height: 44px;
+    }
+
+    .stage-label {
+      font-size: 10px;
+    }
+
+    .idle-label {
+      font-size: 14px;
+    }
+
+    .explainer {
+      font-size: 11px;
+      line-height: 1.6;
+      padding: 0 16px;
+    }
+
+    .explainer-hint {
+      font-size: 10px;
+    }
+
+    .download-btn {
+      padding: 8px 20px;
+      font-size: 13px;
+    }
+
+    .file-name {
+      font-size: 11px;
+    }
+
+    .reset-link {
+      font-size: 11px;
+    }
+
+    .reject-msg,
+    .error-msg {
+      bottom: 60px;
+      font-size: 11px;
+      padding: 6px 16px;
+      max-width: 90%;
+    }
+
+    .status-bar {
+      padding: 6px 10px;
+      gap: 8px;
+      font-size: 9px;
+    }
+
+    .status-label {
+      display: none;
+    }
+
+    .status-divider {
+      height: 10px;
+    }
+  }
 </style>
