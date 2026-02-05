@@ -20,6 +20,7 @@ import {
 import healthRoutes from './routes/health';
 import uploadRoutes from './routes/upload';
 import statsRoutes from './routes/stats';
+import { checkVisqolAvailability } from './services/audioEvaluator';
 
 import { AppError, ERROR_MESSAGES } from './middleware/errorHandler';
 
@@ -109,6 +110,9 @@ app.get('/', (c) => {
 async function initializeServices() {
   // Initialize Redis connection
   getRedisClient();
+
+  // Pre-check ViSQOL availability (caches result for later use)
+  await checkVisqolAvailability();
 
   // Start the audio processing worker
   await startAudioWorker();

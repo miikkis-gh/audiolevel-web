@@ -9,9 +9,11 @@
 
 import { join, dirname, basename, extname } from 'path';
 import { mkdir, unlink } from 'fs/promises';
+import { cpus } from 'os';
 import { env } from '../config/env';
 import { createChildLogger } from '../utils/logger';
 import { runCommand } from '../utils/ffmpeg';
+import { getFFmpegResourceArgs, DEFAULT_RESOURCE_LIMITS } from '../utils/resourceLimiter';
 import type { ProcessingCandidate } from '../types/candidate';
 
 const log = createChildLogger({ service: 'candidateExecutor' });
@@ -72,9 +74,11 @@ export async function executeCandidate(
     // Output as lossless WAV internally (preserves quality)
     const outputPath = join(options.workDir, `${candidate.id}.wav`);
 
-    // Build FFmpeg command
+    // Build FFmpeg command with resource limits
     // Process as WAV to preserve quality, maintain sample rate and bit depth
+    const resourceArgs = getFFmpegResourceArgs(DEFAULT_RESOURCE_LIMITS);
     const args = [
+      ...resourceArgs, // Thread limiting first
       '-i', inputPath,
       '-af', candidate.filterChain,
       '-ar', String(options.sampleRate), // Preserve sample rate
@@ -124,7 +128,19 @@ export async function executeCandidate(
 }
 
 /**
- * Execute multiple candidates in parallel
+ * Calculate maximum concurrent candidates per job
+ * Based on CPU cores and max concurrent jobs to prevent thrashing
+ */
+function getMaxConcurrentCandidates(): number {
+  const totalCores = cpus().length;
+  // Reserve some cores for other jobs and system
+  // Each FFmpeg uses up to 2 threads (from resourceLimiter)
+  const candidatesPerJob = Math.max(1, Math.floor(totalCores / (env.MAX_CONCURRENT_JOBS * 2)));
+  return Math.min(candidatesPerJob, 3); // Cap at 3 to limit memory usage
+}
+
+/**
+ * Execute multiple candidates with controlled concurrency
  *
  * @param inputPath - Path to input audio file
  * @param candidates - Array of processing candidates
@@ -136,12 +152,19 @@ export async function executeCandidates(
   candidates: ProcessingCandidate[],
   options: ExecutionOptions
 ): Promise<CandidateProcessingResult[]> {
-  log.info({ candidateCount: candidates.length }, 'Executing candidates in parallel');
+  const maxConcurrent = getMaxConcurrentCandidates();
+  log.info({ candidateCount: candidates.length, maxConcurrent }, 'Executing candidates with concurrency limit');
 
-  // Execute all candidates in parallel
-  const results = await Promise.all(
-    candidates.map(candidate => executeCandidate(inputPath, candidate, options))
-  );
+  const results: CandidateProcessingResult[] = [];
+
+  // Process candidates in batches to prevent CPU thrashing
+  for (let i = 0; i < candidates.length; i += maxConcurrent) {
+    const batch = candidates.slice(i, i + maxConcurrent);
+    const batchResults = await Promise.all(
+      batch.map(candidate => executeCandidate(inputPath, candidate, options))
+    );
+    results.push(...batchResults);
+  }
 
   const successCount = results.filter(r => r.success).length;
   log.info({ successCount, totalCount: candidates.length }, 'All candidates processed');
