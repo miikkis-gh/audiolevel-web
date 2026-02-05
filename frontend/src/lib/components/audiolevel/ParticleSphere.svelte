@@ -142,6 +142,15 @@
         const twG = useProfileColor ? 25 : comp ? 20 : 40;
         const twB = useProfileColor ? 20 : comp ? 30 : 0;
 
+        // Fake beat pulse at ~120 BPM during processing
+        // At 60fps: 30 frames per beat, 0.209 radians per frame for full cycle
+        let beatPulse = 0;
+        if (s === 'processing') {
+          const rawBeat = Math.sin(frameCount * 0.209);
+          // Shape the wave: fast attack, slower decay
+          beatPulse = rawBeat > 0 ? Math.pow(rawBeat, 0.6) * 0.4 : 0;
+        }
+
         for (let i = 0; i < n; i++) {
           const pt = particles[i];
           pt.angle += pt.speed + pt.drift * Math.sin(frameCount * 0.02);
@@ -151,12 +160,12 @@
           const y = ctr + Math.sin(pt.angle) * r;
           const dn = r / maxR;
           const ef = dn > t ? 0 : 1 - (dn / Math.max(t, 0.01)) * 0.3;
-          const al = ga * pt.br * tw * ef;
+          const al = ga * pt.br * tw * ef * (1 + beatPulse);
           if (al < 0.01) continue;
           const cr = (baseR + tw * twR) | 0;
           const cg = (baseG + tw * twG) | 0;
           const cb = (baseB + tw * twB) | 0;
-          const ds = pt.sz * (0.7 + t * 0.5) * (0.8 + tw * 0.4);
+          const ds = pt.sz * (0.7 + t * 0.5) * (0.8 + tw * 0.4) * (1 + beatPulse * 0.3);
           ctx.beginPath();
           ctx.arc(x, y, ds, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(${cr},${cg},${cb},${al * 0.9})`;
@@ -169,8 +178,8 @@
           }
         }
         if (t > 0.02) {
-          const ca = t * 0.12;
-          const cR = spread * 0.3;
+          const ca = t * 0.12 * (1 + beatPulse * 0.5);
+          const cR = spread * 0.3 * (1 + beatPulse * 0.15);
           const g = ctx.createRadialGradient(ctr, ctr, 0, ctr, ctr, cR);
           const ccStr = useProfileColor ? `${pc[0]},${pc[1]},${pc[2]}` : comp ? '80,210,180' : '100,200,240';
           g.addColorStop(0, `rgba(${ccStr},${ca})`);
