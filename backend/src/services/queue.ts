@@ -91,6 +91,8 @@ export interface AudioJobResult {
     processingApplied: string[];
     candidatesTested: { name: string; score: number; isWinner: boolean }[];
     winnerReason: string;
+    qualityMethod?: 'visqol' | 'spectral_fallback';
+    genreGuess?: { broad: string; confidence: 'low' | 'medium' | 'high' };
   };
 }
 

@@ -89,6 +89,8 @@ async function processAudioJob(
           processingApplied: result.processingReport.processingApplied,
           candidatesTested: result.processingReport.candidatesTested,
           winnerReason: result.processingReport.winnerReason,
+          qualityMethod: result.processingReport.qualityMethod,
+          genreGuess: result.processingReport.genreGuess,
         } : undefined,
       };
     } else {
