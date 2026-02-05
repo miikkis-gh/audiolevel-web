@@ -136,18 +136,16 @@ export async function fetchQueueStatus(): Promise<QueueStatus> {
 export async function uploadFile(file: File): Promise<UploadResponse> {
   const formData = new FormData();
 
-  // Sanitize filename to avoid issues with special characters like []
-  // while preserving the original extension
+  // Sanitize filename to avoid issues with special characters
+  // Replace problematic chars: [ ] { } ( ) # % & + = @ ! $ ^ ~ ` ' " ; : | \ < >
   const ext = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : '';
   const baseName = file.name.substring(0, file.name.length - ext.length);
-  const sanitizedName = baseName.replace(/[[\]]/g, '_') + ext;
+  const sanitizedName = baseName.replace(/[[\]{}()#%&+=@!$^~`'";:|\\<>]/g, '_') + ext;
 
-  // Create a new File with sanitized name if needed
-  const uploadFile = sanitizedName !== file.name
-    ? new File([file], sanitizedName, { type: file.type })
-    : file;
+  // Create a new File with sanitized name
+  const safeFile = new File([file], sanitizedName, { type: file.type });
 
-  formData.append('file', uploadFile);
+  formData.append('file', safeFile);
 
   const response = await fetch(`${API_URL}/api/upload`, {
     method: 'POST',
