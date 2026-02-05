@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libarmadillo-dev \
     libfftw3-dev \
     libsndfile-dev \
-    && pip3 install --break-system-packages numpy \
+    && pip3 install numpy \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Bazelisk (auto-downloads correct Bazel version)
