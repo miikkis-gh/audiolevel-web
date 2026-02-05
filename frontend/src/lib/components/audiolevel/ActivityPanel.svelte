@@ -185,18 +185,23 @@
       {#if stats.totalFiles > 0}
         <div class="content-breakdown">
           {#if stats.contentBreakdown.music > 0}
-            <span class="content-tag music" title="Music">
-               {Math.round((stats.contentBreakdown.music / stats.totalFiles) * 100)}%
+            <span class="content-tag music" title="Music files processed">
+              Music {Math.round((stats.contentBreakdown.music / stats.totalFiles) * 100)}%
             </span>
           {/if}
           {#if stats.contentBreakdown.speech > 0}
-            <span class="content-tag speech" title="Speech">
-               {Math.round((stats.contentBreakdown.speech / stats.totalFiles) * 100)}%
+            <span class="content-tag speech" title="Speech files processed">
+              Speech {Math.round((stats.contentBreakdown.speech / stats.totalFiles) * 100)}%
             </span>
           {/if}
           {#if stats.contentBreakdown.podcast > 0}
-            <span class="content-tag podcast" title="Podcast">
-               {Math.round((stats.contentBreakdown.podcast / stats.totalFiles) * 100)}%
+            <span class="content-tag podcast" title="Podcast files processed">
+              Podcast {Math.round((stats.contentBreakdown.podcast / stats.totalFiles) * 100)}%
+            </span>
+          {/if}
+          {#if stats.contentBreakdown.other > 0}
+            <span class="content-tag other" title="Other files processed">
+              Other {Math.round((stats.contentBreakdown.other / stats.totalFiles) * 100)}%
             </span>
           {/if}
         </div>
@@ -367,19 +372,29 @@
     color: rgba(255, 255, 255, 0.7);
   }
 
+  /* Colors from PROFILE_COLORS in constants.ts */
   .content-tag.music {
+    /* Music / Song: [100, 180, 255] - Blue */
     background: rgba(100, 180, 255, 0.15);
     color: rgba(100, 180, 255, 0.9);
   }
 
   .content-tag.speech {
-    background: rgba(180, 130, 255, 0.15);
-    color: rgba(180, 130, 255, 0.9);
+    /* Audiobook: [80, 210, 160] - Teal */
+    background: rgba(80, 210, 160, 0.15);
+    color: rgba(80, 210, 160, 0.9);
   }
 
   .content-tag.podcast {
-    background: rgba(210, 160, 80, 0.15);
-    color: rgba(230, 180, 100, 0.9);
+    /* Podcast / Talk: [255, 180, 80] - Orange */
+    background: rgba(255, 180, 80, 0.15);
+    color: rgba(255, 180, 80, 0.9);
+  }
+
+  .content-tag.other {
+    /* Neutral gray for unclassified */
+    background: rgba(150, 150, 150, 0.15);
+    color: rgba(150, 150, 150, 0.9);
   }
 
   .genre-section {
