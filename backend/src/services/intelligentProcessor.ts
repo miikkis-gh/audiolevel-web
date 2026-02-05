@@ -82,6 +82,12 @@ export interface ProcessingReport {
     lra: number;
     truePeak: number;
   };
+  /** Whether this result was estimated from similar file */
+  wasEstimated?: boolean;
+  /** Estimation confidence level */
+  estimationConfidence?: 'high' | 'moderate';
+  /** Distance to closest historical match */
+  estimationDistance?: number;
 }
 
 /**
@@ -305,7 +311,8 @@ export async function runIntelligentProcessing(
       evaluation,
       candidates,
       winner,
-      winnerScore
+      winnerScore,
+      prediction
     );
 
     const processingTimeMs = Date.now() - startTime;
@@ -340,8 +347,9 @@ function buildProcessingReport(
   analysis: AnalysisResult,
   evaluation: EvaluationResult,
   candidates: ProcessingCandidate[],
-  winner?: ProcessingCandidate,
-  winnerScore?: CandidateScore
+  winner: ProcessingCandidate | undefined,
+  winnerScore: CandidateScore | undefined,
+  prediction?: SimilarMatch | null
 ): ProcessingReport {
   return {
     contentType: analysis.contentType.type,
@@ -370,6 +378,9 @@ function buildProcessingReport(
       lra: analysis.metrics.loudnessRange,
       truePeak: analysis.metrics.truePeak,
     },
+    wasEstimated: prediction !== null && prediction !== undefined,
+    estimationConfidence: prediction?.confidence,
+    estimationDistance: prediction?.distance,
   };
 }
 
