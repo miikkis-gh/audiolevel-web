@@ -257,7 +257,7 @@ async function getVisqolScore(
 
   if (hasVisqol) {
     try {
-      const { stdout, exitCode } = await runCommand(env.VISQOL_PATH, [
+      const { stdout, stderr, exitCode } = await runCommand(env.VISQOL_PATH, [
         '--reference_file', originalPath,
         '--degraded_file', processedPath,
         '--similarity_to_quality_model', env.VISQOL_MODEL_PATH,
@@ -268,9 +268,13 @@ async function getVisqolScore(
         const mosMatch = stdout.match(/MOS-LQO:\s*([\d.]+)/);
         if (mosMatch) {
           const score = parseFloat(mosMatch[1]);
-          log.debug({ processedPath, visqolScore: score }, 'ViSQOL score calculated');
+          log.info({ processedPath: processedPath.split('/').pop(), visqolScore: score }, 'ViSQOL score calculated');
           return { score, method: 'visqol' };
+        } else {
+          log.warn({ stdout: stdout.slice(0, 500), stderr: stderr.slice(0, 200) }, 'ViSQOL output did not contain MOS score');
         }
+      } else {
+        log.warn({ exitCode, stderr: stderr.slice(0, 500) }, 'ViSQOL returned non-zero exit code');
       }
     } catch (err) {
       log.warn({ err }, 'ViSQOL execution failed, using fallback');
