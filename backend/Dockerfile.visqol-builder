@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y \
     libarmadillo-dev \
     libfftw3-dev \
     libsndfile-dev \
+    && pip3 install --break-system-packages numpy \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Bazelisk
