@@ -1550,8 +1550,8 @@
 
   .report-trigger {
     position: fixed;
-    bottom: 60px;
-    right: 24px;
+    bottom: 70px;
+    right: 16px;
     width: 36px;
     height: 36px;
     border-radius: 50%;
