@@ -123,6 +123,14 @@ export interface AnalysisMetrics {
 }
 
 /**
+ * Genre guess from heuristics
+ */
+export interface GenreGuess {
+  broad: string;
+  confidence: 'low' | 'medium' | 'high';
+}
+
+/**
  * Complete analysis result
  */
 export interface AnalysisResult {
@@ -137,6 +145,9 @@ export interface AnalysisResult {
 
   /** Human-readable problem descriptions */
   problemDescriptions: { problem: string; details: string }[];
+
+  /** Genre guess (only for music content) */
+  genreGuess?: GenreGuess;
 }
 
 /**

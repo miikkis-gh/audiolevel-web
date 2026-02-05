@@ -7,6 +7,7 @@
   import RatingToast from './RatingToast.svelte';
   import AboutModal from './AboutModal.svelte';
   import ActivityPanel from './ActivityPanel.svelte';
+  import GenreSelector from './GenreSelector.svelte';
   import {
     SINGLE_REPORT,
     MAX_BATCH,
@@ -20,7 +21,7 @@
     type OverrideType,
   } from './constants';
   import { getStageLabel, getLayout, getPositions, truncName } from './helpers';
-  import { uploadFile, getDownloadUrl, getJobStatus, fetchRateLimitStatus, submitRating, type ApiError, type JobResult, type RateLimitStatus, type RatingPayload } from '../../../stores/api';
+  import { uploadFile, getDownloadUrl, getJobStatus, fetchRateLimitStatus, submitRating, type ApiError, type JobResult, type RateLimitStatus, type RatingPayload, type GenreGuess } from '../../../stores/api';
   import {
     connectWebSocket,
     disconnectWebSocket,
@@ -61,6 +62,10 @@
   let ratingFileName = $state<string>('');
   let ratingReport = $state<SingleReportData | null>(null);
   let pendingBatchDownloads = $state(0);
+
+  // Genre selector state
+  let genreGuess = $state<GenreGuess | null>(null);
+  let showGenreSelector = $state(false);
 
   // Job tracking
   let currentJobId = $state<string | null>(null);
@@ -323,6 +328,14 @@
             fetchAndUpdateReport(currentJobId).then((jobResult) => {
               if (jobResult) {
                 singleReport = buildReportFromResult(jobResult);
+                // Extract genre guess for music content
+                if (jobResult.processingReport?.genreGuess) {
+                  genreGuess = jobResult.processingReport.genreGuess;
+                  showGenreSelector = true;
+                } else {
+                  genreGuess = null;
+                  showGenreSelector = false;
+                }
               }
             });
 
@@ -617,6 +630,8 @@
     ratingFileName = '';
     ratingReport = null;
     pendingBatchDownloads = 0;
+    genreGuess = null;
+    showGenreSelector = false;
     if (rejectTimer) clearTimeout(rejectTimer);
     if (overrideTimer) clearTimeout(overrideTimer);
     if (mergeTimeout) clearTimeout(mergeTimeout);
@@ -1029,6 +1044,14 @@
               Process another
             </button>
           </div>
+          {#if showGenreSelector && currentJobId}
+            <GenreSelector
+              jobId={currentJobId}
+              genreGuess={genreGuess}
+              onConfirm={() => (showGenreSelector = false)}
+              onDismiss={() => (showGenreSelector = false)}
+            />
+          {/if}
           {#if showRatingToast}
             <RatingToast
               visible={showRatingToast}

@@ -10,6 +10,7 @@
 import { env } from '../config/env';
 import { createChildLogger } from '../utils/logger';
 import { runCommand } from '../utils/ffmpeg';
+import { guessGenre } from './genreHeuristics';
 import type {
   AnalysisResult,
   AnalysisMetrics,
@@ -19,6 +20,7 @@ import type {
   ContentSignal,
   Severity,
   AnalysisThresholds,
+  GenreGuess,
 } from '../types/analysis';
 
 const log = createChildLogger({ service: 'audioAnalyzer' });
@@ -126,14 +128,33 @@ export async function analyzeAudio(
   // Generate human-readable descriptions
   const problemDescriptions = generateProblemDescriptions(problems, metrics);
 
+  // Guess genre for music content
+  let genreGuess: GenreGuess | undefined;
+  if (contentType.type === 'music') {
+    const guess = guessGenre(metrics);
+    genreGuess = {
+      broad: guess.broad,
+      confidence: guess.confidence,
+    };
+    analysisLog.debug({ genre: guess.broad, confidence: guess.confidence }, 'Genre guess');
+  }
+
   const result: AnalysisResult = {
     contentType,
     problems,
     metrics,
     problemDescriptions,
+    genreGuess,
   };
 
-  analysisLog.info({ contentType: contentType.type, problemCount: problemDescriptions.length }, 'Analysis complete');
+  analysisLog.info(
+    {
+      contentType: contentType.type,
+      problemCount: problemDescriptions.length,
+      genre: genreGuess?.broad,
+    },
+    'Analysis complete'
+  );
   return result;
 }
 

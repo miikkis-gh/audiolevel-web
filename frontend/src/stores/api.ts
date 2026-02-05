@@ -28,6 +28,18 @@ export interface DetectedProfile {
   reasons: DetectionReason[];
 }
 
+export interface GenreGuess {
+  broad: string;
+  confidence: 'low' | 'medium' | 'high';
+}
+
+export interface GenreStats {
+  topGenres: { genre: string; count: number; percentage: number }[];
+  todayBreakdown: { genre: string; count: number; percentage: number }[];
+  totalConfirmed: number;
+  todayConfirmed: number;
+}
+
 export interface ProcessingReport {
   contentType: string;
   contentConfidence: number;
@@ -37,6 +49,8 @@ export interface ProcessingReport {
   winnerReason: string;
   /** Method used for perceptual quality scoring */
   qualityMethod?: 'visqol' | 'spectral_fallback';
+  /** Genre guess for music content */
+  genreGuess?: GenreGuess;
 }
 
 export interface JobResult {
@@ -243,4 +257,59 @@ export async function fetchActivityStats(): Promise<ActivityStats> {
   }
   const data = await response.json();
   return data.stats;
+}
+
+// Genre categories
+export const BROAD_GENRES = [
+  'Electronic',
+  'Rock',
+  'Hip-Hop',
+  'Pop',
+  'Classical',
+  'Jazz',
+  'Folk/Acoustic',
+  'Other',
+] as const;
+
+export const GENRE_SUBCATEGORIES: Record<string, string[]> = {
+  Electronic: ['House', 'Techno', 'Drum & Bass', 'Dubstep', 'Trance', 'Ambient Electronic'],
+  Rock: ['Alternative', 'Metal', 'Punk', 'Indie', 'Classic Rock'],
+  'Hip-Hop': ['Rap', 'Trap', 'Lo-Fi Hip-Hop', 'R&B'],
+  Pop: ['Synth Pop', 'Indie Pop', 'Dance Pop'],
+  Classical: ['Orchestral', 'Chamber', 'Piano', 'Film Score'],
+  Jazz: ['Smooth Jazz', 'Bebop', 'Fusion'],
+  'Folk/Acoustic': ['Country', 'Singer-Songwriter', 'World'],
+  Other: ['Podcast Intro', 'Sound Effects', 'Experimental'],
+};
+
+export async function fetchGenreStats(): Promise<GenreStats> {
+  const response = await fetch(`${API_URL}/api/stats/genres`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch genre stats');
+  }
+  const data = await response.json();
+  return data.stats;
+}
+
+export async function confirmGenre(
+  jobId: string,
+  broad: string,
+  detailed?: string
+): Promise<void> {
+  try {
+    const response = await fetch(`${API_URL}/api/stats/genres/confirm`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ jobId, broad, detailed }),
+    });
+
+    if (!response.ok) {
+      console.warn('Genre confirmation failed:', response.status);
+    }
+  } catch (err) {
+    // Silently fail - genre confirmation is non-critical
+    console.warn('Genre confirmation error:', err);
+  }
 }

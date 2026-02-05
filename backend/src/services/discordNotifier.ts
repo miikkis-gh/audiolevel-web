@@ -10,6 +10,7 @@
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { getHourlyActivity, getActivityStats } from './activityStats';
+import { getGenreStats } from './genreStats';
 import { AppError, ERROR_MESSAGES } from '../middleware/errorHandler';
 
 interface DiscordEmbed {
@@ -246,9 +247,10 @@ export async function postActivityReport(): Promise<void> {
 
   try {
     // Get activity data
-    const [hourlyData, stats] = await Promise.all([
+    const [hourlyData, stats, genreStats] = await Promise.all([
       getHourlyActivity(6),
       getActivityStats(),
+      getGenreStats().catch(() => null),
     ]);
 
     const labels = hourlyData.map((d) => d.hour);
@@ -258,23 +260,47 @@ export async function postActivityReport(): Promise<void> {
     // Generate chart URL
     const chartUrl = generateChartUrl(labels, data);
 
+    // Build fields array
+    const fields: { name: string; value: string; inline?: boolean }[] = [
+      { name: 'Last 6 Hours', value: String(totalInPeriod), inline: true },
+      { name: 'Today', value: String(stats.todayFiles), inline: true },
+      { name: 'This Week', value: String(stats.weekFiles), inline: true },
+      { name: 'Total Files', value: String(stats.totalFiles), inline: true },
+      { name: 'Total Duration', value: formatDuration(stats.totalDurationSeconds), inline: true },
+      {
+        name: 'Content Mix',
+        value: `🎵 ${stats.contentBreakdown.music} | 🎙️ ${stats.contentBreakdown.speech} | 🎧 ${stats.contentBreakdown.podcast}`,
+        inline: true,
+      },
+    ];
+
+    // Add genre stats if available
+    if (genreStats && genreStats.topGenres.length > 0) {
+      const topGenresText = genreStats.topGenres
+        .slice(0, 5)
+        .map((g) => `${g.genre}: ${g.percentage}%`)
+        .join(' | ');
+      fields.push({
+        name: '🎸 Top Genres',
+        value: topGenresText,
+        inline: false,
+      });
+
+      if (genreStats.todayConfirmed > 0) {
+        fields.push({
+          name: 'Genres Confirmed',
+          value: `Today: ${genreStats.todayConfirmed} | Total: ${genreStats.totalConfirmed}`,
+          inline: true,
+        });
+      }
+    }
+
     // Build embed with image
     const embed = {
       title: '📊 Activity Report',
       color: 0x50d2b4, // Teal
       image: { url: chartUrl },
-      fields: [
-        { name: 'Last 6 Hours', value: String(totalInPeriod), inline: true },
-        { name: 'Today', value: String(stats.todayFiles), inline: true },
-        { name: 'This Week', value: String(stats.weekFiles), inline: true },
-        { name: 'Total Files', value: String(stats.totalFiles), inline: true },
-        { name: 'Total Duration', value: formatDuration(stats.totalDurationSeconds), inline: true },
-        {
-          name: 'Content Mix',
-          value: `🎵 ${stats.contentBreakdown.music} | 🎙️ ${stats.contentBreakdown.speech} | 🎧 ${stats.contentBreakdown.podcast}`,
-          inline: true,
-        },
-      ],
+      fields,
       footer: { text: 'AudioLevel Stats' },
       timestamp: new Date().toISOString(),
     };

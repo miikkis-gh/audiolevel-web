@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fetchActivityStats, type ActivityStats, type ActivityEvent } from '../../../stores/api';
+  import { fetchActivityStats, fetchGenreStats, type ActivityStats, type ActivityEvent, type GenreStats } from '../../../stores/api';
 
   interface Props {
     wsUrl: string;
@@ -8,6 +8,7 @@
   let { wsUrl }: Props = $props();
 
   let stats = $state<ActivityStats | null>(null);
+  let genreStats = $state<GenreStats | null>(null);
   let recentActivity = $state<ActivityEvent[]>([]);
   let expanded = $state(false);
   let ws: WebSocket | null = null;
@@ -16,8 +17,13 @@
   // Fetch initial stats
   async function loadStats() {
     try {
-      stats = await fetchActivityStats();
-      recentActivity = stats.recentActivity || [];
+      const [activityData, genreData] = await Promise.all([
+        fetchActivityStats(),
+        fetchGenreStats().catch(() => null),
+      ]);
+      stats = activityData;
+      recentActivity = activityData.recentActivity || [];
+      genreStats = genreData;
     } catch (err) {
       console.warn('Failed to load activity stats:', err);
     }
@@ -196,6 +202,26 @@
         </div>
       {/if}
 
+      {#if genreStats && genreStats.topGenres.length > 0}
+        <div class="genre-section">
+          <div class="section-label">Top genres (user-confirmed)</div>
+          <div class="genre-bars">
+            {#each genreStats.topGenres.slice(0, 4) as genre}
+              <div class="genre-bar-row">
+                <span class="genre-name">{genre.genre}</span>
+                <div class="genre-bar-track">
+                  <div class="genre-bar-fill" style="width: {genre.percentage}%"></div>
+                </div>
+                <span class="genre-percent">{genre.percentage}%</span>
+              </div>
+            {/each}
+          </div>
+          {#if genreStats.totalConfirmed > 0}
+            <div class="genre-total">{genreStats.totalConfirmed} genres confirmed</div>
+          {/if}
+        </div>
+      {/if}
+
       {#if recentActivity.length > 0}
         <div class="activity-feed">
           <div class="feed-label">Recent activity</div>
@@ -354,6 +380,70 @@
   .content-tag.podcast {
     background: rgba(210, 160, 80, 0.15);
     color: rgba(230, 180, 100, 0.9);
+  }
+
+  .genre-section {
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin-bottom: 10px;
+  }
+
+  .section-label {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 8px;
+  }
+
+  .genre-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .genre-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .genre-name {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    width: 70px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .genre-bar-track {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .genre-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, rgba(147, 112, 219, 0.6), rgba(147, 112, 219, 0.9));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .genre-percent {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.5);
+    width: 28px;
+    text-align: right;
+  }
+
+  .genre-total {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.35);
+    text-align: center;
+    margin-top: 6px;
   }
 
   .activity-feed {
