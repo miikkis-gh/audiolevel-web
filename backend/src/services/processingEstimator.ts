@@ -1,5 +1,7 @@
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { dirname } from 'path';
 import type { AnalysisMetrics } from '../types/analysis';
-import type { AudioFingerprint } from '../types/estimator';
+import type { AudioFingerprint, ProcessingOutcome } from '../types/estimator';
 
 /**
  * Normalization ranges for each metric
@@ -57,4 +59,52 @@ export function extractFingerprint(metrics: AnalysisMetrics): AudioFingerprint {
     spectralCentroid: metrics.spectralCentroid,
     spectralFlatness: metrics.spectralFlatness,
   };
+}
+
+/**
+ * Load processing history from JSON file
+ */
+export function loadHistory(historyPath: string): ProcessingOutcome[] {
+  if (!existsSync(historyPath)) {
+    return [];
+  }
+
+  try {
+    const content = readFileSync(historyPath, 'utf-8');
+    return JSON.parse(content) as ProcessingOutcome[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Save a processing outcome to history
+ */
+export function saveOutcome(outcome: ProcessingOutcome, historyPath: string, maxHistory = 10000): void {
+  // Ensure directory exists
+  const dir = dirname(historyPath);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  const history = loadHistory(historyPath);
+  history.push(outcome);
+
+  // Prune oldest entries if over limit
+  const pruned = history.length > maxHistory
+    ? history.slice(history.length - maxHistory)
+    : history;
+
+  writeFileSync(historyPath, JSON.stringify(pruned, null, 2));
+}
+
+/**
+ * Clear all history (for testing)
+ */
+export function clearHistory(historyPath: string): void {
+  const dir = dirname(historyPath);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(historyPath, '[]');
 }

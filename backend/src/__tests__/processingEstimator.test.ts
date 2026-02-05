@@ -1,7 +1,11 @@
-import { describe, expect, test } from 'bun:test';
-import { extractFingerprint, computeDistance } from '../services/processingEstimator';
+import { describe, expect, test, beforeEach, afterAll } from 'bun:test';
+import { extractFingerprint, computeDistance, loadHistory, saveOutcome, clearHistory } from '../services/processingEstimator';
 import type { AudioFingerprint } from '../types/estimator';
+import type { ProcessingOutcome } from '../types/estimator';
 import type { AnalysisMetrics } from '../types/analysis';
+import { rmSync, existsSync } from 'fs';
+
+const TEST_HISTORY_PATH = 'data/test-processing-history.json';
 
 describe('Processing Estimator', () => {
   describe('extractFingerprint', () => {
@@ -134,6 +138,104 @@ describe('Processing Estimator', () => {
 
       const distance = computeDistance(speech, music);
       expect(distance).toBeGreaterThan(0.2);
+    });
+  });
+
+  describe('History Storage', () => {
+    beforeEach(() => {
+      if (existsSync(TEST_HISTORY_PATH)) {
+        rmSync(TEST_HISTORY_PATH);
+      }
+    });
+
+    afterAll(() => {
+      if (existsSync(TEST_HISTORY_PATH)) {
+        rmSync(TEST_HISTORY_PATH);
+      }
+    });
+
+    test('loadHistory returns empty array when file does not exist', () => {
+      const history = loadHistory(TEST_HISTORY_PATH);
+      expect(history).toEqual([]);
+    });
+
+    test('saveOutcome creates file and stores outcome', () => {
+      const outcome: ProcessingOutcome = {
+        fingerprint: {
+          integratedLufs: -16,
+          loudnessRange: 10,
+          silenceRatio: 0.1,
+          spectralCentroid: 2500,
+          spectralFlatness: 0.4,
+        },
+        winnerCandidateId: 'conservative-speech',
+        winnerAggressiveness: 'conservative',
+        contentType: 'speech',
+        timestamp: Date.now(),
+      };
+
+      saveOutcome(outcome, TEST_HISTORY_PATH);
+
+      const history = loadHistory(TEST_HISTORY_PATH);
+      expect(history).toHaveLength(1);
+      expect(history[0].winnerCandidateId).toBe('conservative-speech');
+    });
+
+    test('saveOutcome appends to existing history', () => {
+      const outcome1: ProcessingOutcome = {
+        fingerprint: {
+          integratedLufs: -16,
+          loudnessRange: 10,
+          silenceRatio: 0.1,
+          spectralCentroid: 2500,
+          spectralFlatness: 0.4,
+        },
+        winnerCandidateId: 'conservative-speech',
+        winnerAggressiveness: 'conservative',
+        contentType: 'speech',
+        timestamp: Date.now(),
+      };
+      const outcome2: ProcessingOutcome = {
+        fingerprint: {
+          integratedLufs: -14,
+          loudnessRange: 8,
+          silenceRatio: 0.02,
+          spectralCentroid: 1500,
+          spectralFlatness: 0.2,
+        },
+        winnerCandidateId: 'minimal-music',
+        winnerAggressiveness: 'conservative',
+        contentType: 'music',
+        timestamp: Date.now(),
+      };
+
+      saveOutcome(outcome1, TEST_HISTORY_PATH);
+      saveOutcome(outcome2, TEST_HISTORY_PATH);
+
+      const history = loadHistory(TEST_HISTORY_PATH);
+      expect(history).toHaveLength(2);
+    });
+
+    test('clearHistory removes all entries', () => {
+      const outcome: ProcessingOutcome = {
+        fingerprint: {
+          integratedLufs: -16,
+          loudnessRange: 10,
+          silenceRatio: 0.1,
+          spectralCentroid: 2500,
+          spectralFlatness: 0.4,
+        },
+        winnerCandidateId: 'conservative-speech',
+        winnerAggressiveness: 'conservative',
+        contentType: 'speech',
+        timestamp: Date.now(),
+      };
+
+      saveOutcome(outcome, TEST_HISTORY_PATH);
+      clearHistory(TEST_HISTORY_PATH);
+
+      const history = loadHistory(TEST_HISTORY_PATH);
+      expect(history).toEqual([]);
     });
   });
 });
