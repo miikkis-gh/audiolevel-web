@@ -395,7 +395,7 @@ function buildCandidate(
   };
 
   return {
-    id: `candidate-${level}-${Date.now()}`,
+    id: `${level}-${contentType}`,
     name: names[level] || level,
     description: descriptions[level] || '',
     aggressiveness: level === 'content-optimized' ? 'balanced' : level,
