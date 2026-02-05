@@ -1,10 +1,11 @@
 import { describe, expect, test, beforeEach, afterAll } from 'bun:test';
-import { extractFingerprint, computeDistance, loadHistory, saveOutcome, clearHistory, findSimilar } from '../services/processingEstimator';
+import { extractFingerprint, computeDistance, loadHistory, saveOutcome, clearHistory, findSimilar, loadStats, recordPredictionResult } from '../services/processingEstimator';
 import type { AudioFingerprint, ProcessingOutcome, EstimatorConfig } from '../types/estimator';
 import type { AnalysisMetrics } from '../types/analysis';
 import { rmSync, existsSync } from 'fs';
 
 const TEST_HISTORY_PATH = 'data/test-processing-history.json';
+const TEST_STATS_PATH = 'data/test-estimator-stats.json';
 
 const TEST_CONFIG: EstimatorConfig = {
   historyPath: TEST_HISTORY_PATH,
@@ -382,6 +383,58 @@ describe('Processing Estimator', () => {
       const match = findSimilar(query, TEST_CONFIG);
       expect(match).not.toBeNull();
       expect(match!.matchCount).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('Stats Tracking', () => {
+    beforeEach(() => {
+      if (existsSync(TEST_STATS_PATH)) {
+        rmSync(TEST_STATS_PATH);
+      }
+    });
+
+    afterAll(() => {
+      if (existsSync(TEST_STATS_PATH)) {
+        rmSync(TEST_STATS_PATH);
+      }
+    });
+
+    test('loadStats returns zeros when file does not exist', () => {
+      const stats = loadStats(TEST_STATS_PATH);
+      expect(stats.totalPredictions).toBe(0);
+      expect(stats.highConfidenceHits).toBe(0);
+      expect(stats.highConfidenceMisses).toBe(0);
+    });
+
+    test('recordPredictionResult increments high confidence hit', () => {
+      recordPredictionResult('high', true, TEST_STATS_PATH);
+
+      const stats = loadStats(TEST_STATS_PATH);
+      expect(stats.totalPredictions).toBe(1);
+      expect(stats.highConfidenceHits).toBe(1);
+      expect(stats.highConfidenceMisses).toBe(0);
+    });
+
+    test('recordPredictionResult increments moderate confidence miss', () => {
+      recordPredictionResult('moderate', false, TEST_STATS_PATH);
+
+      const stats = loadStats(TEST_STATS_PATH);
+      expect(stats.totalPredictions).toBe(1);
+      expect(stats.moderateConfidenceHits).toBe(0);
+      expect(stats.moderateConfidenceMisses).toBe(1);
+    });
+
+    test('stats accumulate across multiple calls', () => {
+      recordPredictionResult('high', true, TEST_STATS_PATH);
+      recordPredictionResult('high', true, TEST_STATS_PATH);
+      recordPredictionResult('high', false, TEST_STATS_PATH);
+      recordPredictionResult('moderate', true, TEST_STATS_PATH);
+
+      const stats = loadStats(TEST_STATS_PATH);
+      expect(stats.totalPredictions).toBe(4);
+      expect(stats.highConfidenceHits).toBe(2);
+      expect(stats.highConfidenceMisses).toBe(1);
+      expect(stats.moderateConfidenceHits).toBe(1);
     });
   });
 });

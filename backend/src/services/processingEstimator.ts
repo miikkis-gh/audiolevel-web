@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import type { AnalysisMetrics } from '../types/analysis';
-import type { AudioFingerprint, ProcessingOutcome, SimilarMatch, EstimatorConfig } from '../types/estimator';
+import type { AudioFingerprint, ProcessingOutcome, SimilarMatch, EstimatorConfig, EstimatorStats } from '../types/estimator';
 
 /**
  * Normalization ranges for each metric
@@ -154,4 +154,70 @@ export function findSimilar(
     distance: closest.distance,
     matchCount,
   };
+}
+
+/**
+ * Load estimator stats from file
+ */
+export function loadStats(statsPath: string): EstimatorStats {
+  if (!existsSync(statsPath)) {
+    return {
+      totalPredictions: 0,
+      highConfidenceHits: 0,
+      highConfidenceMisses: 0,
+      moderateConfidenceHits: 0,
+      moderateConfidenceMisses: 0,
+      lastUpdated: 0,
+    };
+  }
+
+  try {
+    const content = readFileSync(statsPath, 'utf-8');
+    return JSON.parse(content) as EstimatorStats;
+  } catch {
+    return {
+      totalPredictions: 0,
+      highConfidenceHits: 0,
+      highConfidenceMisses: 0,
+      moderateConfidenceHits: 0,
+      moderateConfidenceMisses: 0,
+      lastUpdated: 0,
+    };
+  }
+}
+
+/**
+ * Record a prediction result for stats tracking
+ */
+export function recordPredictionResult(
+  confidence: 'high' | 'moderate',
+  correct: boolean,
+  statsPath: string
+): void {
+  const dir = dirname(statsPath);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  const stats = loadStats(statsPath);
+
+  stats.totalPredictions++;
+
+  if (confidence === 'high') {
+    if (correct) {
+      stats.highConfidenceHits++;
+    } else {
+      stats.highConfidenceMisses++;
+    }
+  } else {
+    if (correct) {
+      stats.moderateConfidenceHits++;
+    } else {
+      stats.moderateConfidenceMisses++;
+    }
+  }
+
+  stats.lastUpdated = Date.now();
+
+  writeFileSync(statsPath, JSON.stringify(stats, null, 2));
 }
