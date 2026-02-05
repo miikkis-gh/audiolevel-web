@@ -972,137 +972,173 @@
     </div>
   </div>
 
-  <!-- Info area below -->
+  <!-- Info area below - fixed height to prevent layout shift -->
   <div
-    style="margin-top: {infoMarginTop}px; min-height: 100px; transition: margin-top 0.6s cubic-bezier(0.4, 0, 0.2, 1);"
+    class="info-area"
+    style="margin-top: {infoMarginTop}px; transition: margin-top 0.6s cubic-bezier(0.4, 0, 0.2, 1);"
   >
-    {#if mode === 'idle'}
-      <div class="idle-label">
-        {dragOver ? 'Release to process' : 'Drop audio files or click'}
-      </div>
-      <div class="explainer">
-        Normalize your audio to broadcast standards.<br />
-        Drop files → auto-detect content type → download processed audio.<br />
-        <span class="explainer-hint">After processing, tap the icon in the bottom right for a detailed analysis report.</span>
-      </div>
-    {/if}
-
-    {#if mode === 'processing'}
-      <div role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
-        <div class="progress-num">{progress}%</div>
-        <div class="stage-label">{getStageLabel(progress)}</div>
-      </div>
-    {/if}
-
-    {#if mode === 'complete'}
-      <div class="complete-area">
-        <div class="file-name">{fileName}</div>
-        <button class="download-btn" onclick={handleDownload}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Download
-        </button>
-        <div>
-          <button class="reset-btn" onclick={reset}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <polyline points="1 4 1 10 7 10" />
-              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-            </svg>
-            Process another
-          </button>
+    <div
+      class="info-content"
+      class:active={mode === 'idle'}
+    >
+      {#if mode === 'idle'}
+        <div class="idle-label">
+          {dragOver ? 'Release to process' : 'Drop audio files or click'}
         </div>
-        {#if showRatingToast}
-          <RatingToast
-            visible={showRatingToast}
-            onRate={handleRating}
-            onDismiss={dismissRatingToast}
-          />
-        {/if}
-      </div>
-    {/if}
+        <div class="explainer">
+          Normalize your audio to broadcast standards.<br />
+          Drop files → auto-detect content type → download processed audio.<br />
+          <span class="explainer-hint">After processing, tap the icon in the bottom right for a detailed analysis report.</span>
+        </div>
+      {/if}
+    </div>
 
-    {#if mode === 'splitting'}
-      <div class="stage-label" style="animation: fadeUp 0.4s ease-out">
-        Preparing {batchFiles.length} files
-      </div>
-    {/if}
+    <div
+      class="info-content"
+      class:active={mode === 'processing'}
+    >
+      {#if mode === 'processing'}
+        <div role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
+          <div class="progress-num">{progress}%</div>
+          <div class="stage-label">{getStageLabel(progress)}</div>
+        </div>
+      {/if}
+    </div>
 
-    {#if mode === 'batch'}
-      <div role="progressbar" aria-valuenow={overallProg} aria-valuemin={0} aria-valuemax={100}>
-        <div class="progress-num">{overallProg}%</div>
-        <div class="stage-label">{doneCount} of {batchFiles.length} complete</div>
-      </div>
-    {/if}
-
-    {#if mode === 'merging'}
-      <div class="stage-label" style="animation: fadeUp 0.3s ease-out">Finalizing batch</div>
-    {/if}
-
-    {#if mode === 'batch-complete'}
-      <div class="complete-area">
-        <div class="file-name">{batchFiles.filter(f => f.fileState === 'complete').length} of {batchFiles.length} files processed</div>
-        <div class="download-dropdown">
-          <button class="download-btn" onclick={() => handleBatchDownload()} disabled={zipping}>
+    <div
+      class="info-content"
+      class:active={mode === 'complete'}
+    >
+      {#if mode === 'complete'}
+        <div class="complete-area">
+          <div class="file-name">{fileName}</div>
+          <button class="download-btn" onclick={handleDownload}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            {zipping ? 'Creating ZIP...' : 'Download All'}
+            Download
           </button>
-          <button
-            class="download-btn dropdown-toggle"
-            onclick={() => (downloadDropdownOpen = !downloadDropdownOpen)}
-            disabled={zipping}
-            aria-label="Download options"
-            aria-expanded={downloadDropdownOpen}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-          {#if downloadDropdownOpen}
-            <div class="dropdown-menu">
-              <button onclick={() => handleBatchDownload()}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Individual files
-              </button>
-              <button onclick={handleBatchDownloadZip}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                  <line x1="12" y1="11" x2="12" y2="17" />
-                  <line x1="9" y1="14" x2="15" y2="14" />
-                </svg>
-                Download as ZIP
-              </button>
-            </div>
+          <div>
+            <button class="reset-btn" onclick={reset}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+              Process another
+            </button>
+          </div>
+          {#if showRatingToast}
+            <RatingToast
+              visible={showRatingToast}
+              onRate={handleRating}
+              onDismiss={dismissRatingToast}
+            />
           {/if}
         </div>
-        <div>
-          <button class="reset-btn" onclick={reset}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <polyline points="1 4 1 10 7 10" />
-              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-            </svg>
-            Process another
-          </button>
+      {/if}
+    </div>
+
+    <div
+      class="info-content"
+      class:active={mode === 'splitting'}
+    >
+      {#if mode === 'splitting'}
+        <div class="stage-label" style="animation: fadeUp 0.4s ease-out">
+          Preparing {batchFiles.length} files
         </div>
-        {#if showRatingToast}
-          <RatingToast
-            visible={showRatingToast}
-            onRate={handleRating}
-            onDismiss={dismissRatingToast}
-          />
-        {/if}
-      </div>
-    {/if}
+      {/if}
+    </div>
+
+    <div
+      class="info-content"
+      class:active={mode === 'batch'}
+    >
+      {#if mode === 'batch'}
+        <div role="progressbar" aria-valuenow={overallProg} aria-valuemin={0} aria-valuemax={100}>
+          <div class="progress-num">{overallProg}%</div>
+          <div class="stage-label">{doneCount} of {batchFiles.length} complete</div>
+        </div>
+      {/if}
+    </div>
+
+    <div
+      class="info-content"
+      class:active={mode === 'merging'}
+    >
+      {#if mode === 'merging'}
+        <div class="stage-label" style="animation: fadeUp 0.3s ease-out">Finalizing batch</div>
+      {/if}
+    </div>
+
+    <div
+      class="info-content"
+      class:active={mode === 'batch-complete'}
+    >
+      {#if mode === 'batch-complete'}
+        <div class="complete-area">
+          <div class="file-name">{batchFiles.filter(f => f.fileState === 'complete').length} of {batchFiles.length} files processed</div>
+          <div class="download-dropdown">
+            <button class="download-btn" onclick={() => handleBatchDownload()} disabled={zipping}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              {zipping ? 'Creating ZIP...' : 'Download All'}
+            </button>
+            <button
+              class="download-btn dropdown-toggle"
+              onclick={() => (downloadDropdownOpen = !downloadDropdownOpen)}
+              disabled={zipping}
+              aria-label="Download options"
+              aria-expanded={downloadDropdownOpen}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            {#if downloadDropdownOpen}
+              <div class="dropdown-menu">
+                <button onclick={() => handleBatchDownload()}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Individual files
+                </button>
+                <button onclick={handleBatchDownloadZip}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    <line x1="12" y1="11" x2="12" y2="17" />
+                    <line x1="9" y1="14" x2="15" y2="14" />
+                  </svg>
+                  Download as ZIP
+                </button>
+              </div>
+            {/if}
+          </div>
+          <div>
+            <button class="reset-btn" onclick={reset}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+              Process another
+            </button>
+          </div>
+          {#if showRatingToast}
+            <RatingToast
+              visible={showRatingToast}
+              onRate={handleRating}
+              onDismiss={dismissRatingToast}
+            />
+          {/if}
+        </div>
+      {/if}
+    </div>
   </div>
 
   <!-- Report trigger -->
@@ -1400,6 +1436,32 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* Info area - fixed height container to prevent layout shift */
+  .info-area {
+    position: relative;
+    height: 130px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .info-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+    pointer-events: none;
+  }
+
+  .info-content.active {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
   }
 
   .idle-label {
@@ -1799,6 +1861,10 @@
       transform: scale(0.9);
     }
 
+    .info-area {
+      height: 120px;
+    }
+
     .branding {
       top: 16px;
       left: 16px;
@@ -1851,6 +1917,10 @@
   @media (max-width: 480px) {
     .sphere-container {
       transform: scale(0.8);
+    }
+
+    .info-area {
+      height: 110px;
     }
 
     .branding {
