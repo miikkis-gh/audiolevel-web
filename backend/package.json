@@ -14,6 +14,8 @@
     "dev": "bun run --hot src/index.ts",
     "start": "bun run src/index.ts",
     "test": "bun test",
+    "test:unit": "bun test src/__tests__/audioAnalyzer.test.ts src/__tests__/audioEvaluator.test.ts src/__tests__/candidateGenerator.test.ts src/__tests__/ffmpeg.test.ts src/__tests__/masteringProcessor.test.ts src/__tests__/validation.test.ts",
+    "test:integration": "bun test src/__tests__/health.test.ts src/__tests__/queue.test.ts src/__tests__/upload.integration.test.ts src/__tests__/websocket.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
