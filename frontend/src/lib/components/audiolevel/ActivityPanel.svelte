@@ -373,8 +373,8 @@
   }
 
   .content-tag.speech {
-    background: rgba(80, 180, 210, 0.15);
-    color: rgba(100, 200, 230, 0.9);
+    background: rgba(180, 130, 255, 0.15);
+    color: rgba(180, 130, 255, 0.9);
   }
 
   .content-tag.podcast {
