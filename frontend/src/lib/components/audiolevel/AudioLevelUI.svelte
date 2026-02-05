@@ -46,7 +46,7 @@
   let singleReport = $state<SingleReportData>({ ...SINGLE_REPORT });
   let rejectMsg = $state('');
   let rejectPulse = $state(false);
-  let errorMsg = $state('');
+  let errorState = $state<{ message: string; hint?: string } | null>(null);
   let downloadDropdownOpen = $state(false);
   let zipping = $state(false);
   let rateLimitStatus = $state<RateLimitStatus | null>(null);
@@ -100,6 +100,22 @@
       target: 'Adaptive',
     },
   };
+
+  // Error helper functions
+  let errorTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function setError(message: string, hint?: string, autoHideMs?: number) {
+    errorState = { message, hint };
+    if (errorTimer) clearTimeout(errorTimer);
+    if (autoHideMs) {
+      errorTimer = setTimeout(() => (errorState = null), autoHideMs);
+    }
+  }
+
+  function clearError() {
+    errorState = null;
+    if (errorTimer) clearTimeout(errorTimer);
+  }
 
   // Format number for display
   function formatLufs(value: number | undefined): string {
@@ -315,7 +331,7 @@
               setTimeout(() => (reportReady = true), 600);
             }, 400);
           } else if (result.error) {
-            errorMsg = result.error;
+            setError(result.error);
             mode = 'idle';
           }
         }
@@ -444,13 +460,13 @@
   // Handlers
   async function uploadSingleFile(file: File) {
     try {
-      errorMsg = '';
+      clearError();
       const response = await uploadFile(file);
       currentJobId = response.jobId;
       subscribeToJob(response.jobId);
     } catch (err) {
       const apiError = err as ApiError;
-      errorMsg = apiError.message || 'Upload failed';
+      setError(apiError.message || 'Upload failed', apiError.hint);
       mode = 'idle';
     }
   }
@@ -593,7 +609,7 @@
     reprocessing = false;
     singleReport = { ...SINGLE_REPORT };
     rejectMsg = '';
-    errorMsg = '';
+    clearError();
     currentDownloadUrl = null;
     processedCompletions = new Set();
     showRatingToast = false;
@@ -738,8 +754,7 @@
       }
     } catch (err) {
       console.error('Failed to create ZIP:', err);
-      errorMsg = 'Failed to create ZIP file';
-      setTimeout(() => (errorMsg = ''), 3000);
+      setError('Failed to create ZIP file', 'Try downloading files individually', 3000);
     } finally {
       zipping = false;
     }
@@ -875,8 +890,13 @@
     <div class="reject-msg">{rejectMsg}</div>
   {/if}
 
-  {#if errorMsg}
-    <div class="error-msg">{errorMsg}</div>
+  {#if errorState}
+    <div class="error-msg">
+      <span class="error-message">{errorState.message}</span>
+      {#if errorState.hint}
+        <span class="error-hint">{errorState.hint}</span>
+      {/if}
+    </div>
   {/if}
 
   <!-- Sphere area -->
@@ -1300,12 +1320,25 @@
     background: rgba(255, 100, 100, 0.08);
     border: 1px solid rgba(255, 100, 100, 0.15);
     border-radius: 20px;
-    padding: 8px 20px;
+    padding: 10px 20px;
     z-index: 40;
     animation: fadeUp 0.3s ease-out;
     letter-spacing: 0.3px;
     max-width: 80%;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .error-message {
+    font-weight: 500;
+  }
+
+  .error-hint {
+    font-size: 10px;
+    color: rgba(255, 100, 100, 0.6);
+    font-weight: 400;
   }
 
   .sphere-container {
@@ -1891,6 +1924,10 @@
       font-size: 11px;
       padding: 6px 16px;
       max-width: 90%;
+    }
+
+    .error-hint {
+      font-size: 9px;
     }
 
     .status-bar {
