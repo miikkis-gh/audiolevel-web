@@ -24,9 +24,18 @@ import {
   type CandidateProcessingResult,
 } from './candidateExecutor';
 import { evaluateCandidates, createEvaluationConfig } from './audioEvaluator';
+import {
+  extractFingerprint,
+  findSimilar,
+  saveOutcome,
+  getEstimatorConfig,
+  logPrediction,
+  recordPredictionResult,
+} from './processingEstimator';
 import type { AnalysisResult, ContentType } from '../types/analysis';
 import type { ProcessingCandidate } from '../types/candidate';
 import type { EvaluationResult, CandidateScore } from '../types/evaluation';
+import type { AudioFingerprint, SimilarMatch, ProcessingOutcome } from '../types/estimator';
 
 const log = createChildLogger({ service: 'intelligentProcessor' });
 
@@ -120,10 +129,50 @@ export async function runIntelligentProcessing(
 
     callbacks?.onProgress?.(15);
 
-    // Stage 2: Generate candidates
+    // Check estimation before generating candidates
+    const estimatorConfig = getEstimatorConfig();
+    let prediction: SimilarMatch | null = null;
+    let fingerprint: AudioFingerprint | null = null;
+
+    if (estimatorConfig.enabled) {
+      fingerprint = extractFingerprint(analysis.metrics);
+      prediction = findSimilar(fingerprint, estimatorConfig);
+
+      if (prediction) {
+        processorLog.info({
+          confidence: prediction.confidence,
+          predictedWinner: prediction.predictedWinner,
+          distance: prediction.distance,
+          matchCount: prediction.matchCount,
+        }, 'Found similar historical file');
+      }
+    }
+
+    // Stage 2: Generate candidates (may be reduced based on prediction)
     callbacks?.onStage?.('Generating processing strategies...');
 
-    const { candidates, reasoning } = generateCandidates(analysis);
+    let { candidates, reasoning } = generateCandidates(analysis);
+
+    // If high confidence prediction, only run the predicted winner
+    if (prediction?.confidence === 'high') {
+      const predictedCandidate = candidates.find(c => c.id === prediction.predictedWinner);
+      if (predictedCandidate) {
+        candidates = [predictedCandidate];
+        processorLog.info({ candidateId: predictedCandidate.id }, 'High confidence: using single predicted candidate');
+      }
+    }
+    // If moderate confidence, run predicted + one alternative
+    else if (prediction?.confidence === 'moderate') {
+      const predictedCandidate = candidates.find(c => c.id === prediction.predictedWinner);
+      const alternative = candidates.find(c => c.id !== prediction.predictedWinner);
+      if (predictedCandidate && alternative) {
+        candidates = [predictedCandidate, alternative];
+        processorLog.info(
+          { predictedId: predictedCandidate.id, alternativeId: alternative.id },
+          'Moderate confidence: using predicted + alternative'
+        );
+      }
+    }
 
     processorLog.info({ candidateCount: candidates.length }, 'Candidates generated');
 
@@ -176,6 +225,38 @@ export async function runIntelligentProcessing(
       winnerId: evaluation.winnerId,
       winnerName: evaluation.winnerName,
     }, 'Winner selected');
+
+    // Record outcome for future estimation
+    if (estimatorConfig.enabled && fingerprint) {
+      const actualWinner = candidates.find(c => c.id === evaluation.winnerId);
+
+      const outcome: ProcessingOutcome = {
+        fingerprint,
+        winnerCandidateId: evaluation.winnerId,
+        winnerAggressiveness: actualWinner?.aggressiveness ?? 'balanced',
+        contentType: analysis.contentType.type,
+        timestamp: Date.now(),
+        wasPredicted: prediction !== null,
+        predictionCorrect: prediction ? prediction.predictedWinner === evaluation.winnerId : undefined,
+      };
+
+      saveOutcome(outcome, estimatorConfig.historyPath, estimatorConfig.maxHistory);
+
+      // Log and record prediction result if we made a prediction
+      if (prediction) {
+        logPrediction(
+          prediction.predictedWinner,
+          evaluation.winnerId,
+          prediction.confidence,
+          prediction.distance
+        );
+        recordPredictionResult(
+          prediction.confidence,
+          prediction.predictedWinner === evaluation.winnerId,
+          estimatorConfig.statsPath
+        );
+      }
+    }
 
     callbacks?.onProgress?.(90);
 
