@@ -215,7 +215,7 @@
 <style>
   .activity-panel {
     position: fixed;
-    bottom: 16px;
+    bottom: 70px;
     left: 16px;
     background: rgba(16, 20, 32, 0.95);
     backdrop-filter: blur(20px);
