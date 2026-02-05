@@ -4,6 +4,7 @@
   import ParticleSphere from './ParticleSphere.svelte';
   import SingleReport from './SingleReport.svelte';
   import BatchReport from './BatchReport.svelte';
+  import RatingToast from './RatingToast.svelte';
   import {
     SINGLE_REPORT,
     MAX_BATCH,
@@ -17,7 +18,7 @@
     type OverrideType,
   } from './constants';
   import { getStageLabel, getLayout, getPositions, truncName } from './helpers';
-  import { uploadFile, getDownloadUrl, getJobStatus, fetchRateLimitStatus, type ApiError, type JobResult, type RateLimitStatus } from '../../../stores/api';
+  import { uploadFile, getDownloadUrl, getJobStatus, fetchRateLimitStatus, submitRating, type ApiError, type JobResult, type RateLimitStatus, type RatingPayload } from '../../../stores/api';
   import {
     connectWebSocket,
     disconnectWebSocket,
@@ -47,6 +48,13 @@
   let zipping = $state(false);
   let rateLimitStatus = $state<RateLimitStatus | null>(null);
   let now = $state(Date.now());
+
+  // Rating toast state
+  let showRatingToast = $state(false);
+  let ratingJobId = $state<string | null>(null);
+  let ratingFileName = $state<string>('');
+  let ratingReport = $state<SingleReportData | null>(null);
+  let pendingBatchDownloads = $state(0);
 
   // Job tracking
   let currentJobId = $state<string | null>(null);
@@ -201,6 +209,21 @@
       standard: single.standard,
       notes: single.notes,
       intelligentProcessing: single.intelligentProcessing,
+    };
+  }
+
+  // Convert batch report back to single report for rating
+  function buildReportFromBatchReport(batch: BatchReportData): SingleReportData {
+    return {
+      detectedAs: batch.type,
+      confidence: batch.conf,
+      reasons: batch.reasons,
+      before: batch.before,
+      after: batch.after,
+      target: batch.target,
+      standard: batch.standard,
+      notes: batch.notes,
+      intelligentProcessing: batch.intelligentProcessing,
     };
   }
 
@@ -567,6 +590,11 @@
     errorMsg = '';
     currentDownloadUrl = null;
     processedCompletions = new Set();
+    showRatingToast = false;
+    ratingJobId = null;
+    ratingFileName = '';
+    ratingReport = null;
+    pendingBatchDownloads = 0;
     if (rejectTimer) clearTimeout(rejectTimer);
     if (overrideTimer) clearTimeout(overrideTimer);
     if (mergeTimeout) clearTimeout(mergeTimeout);
@@ -632,8 +660,10 @@
   function handleDownload() {
     if (currentJobId && currentDownloadUrl) {
       triggerDownload(currentDownloadUrl, fileName);
+      showRatingToastAfterDownload(currentJobId, fileName, singleReport);
     } else if (currentJobId) {
       triggerDownload(getDownloadUrl(currentJobId), fileName);
+      showRatingToastAfterDownload(currentJobId, fileName, singleReport);
     }
   }
 
@@ -644,14 +674,25 @@
       if (file?.jobId) {
         const url = file.downloadUrl || getDownloadUrl(file.jobId);
         triggerDownload(url, file.name);
+        // Show rating toast for single file from batch
+        const reportData = buildReportFromBatchReport(file.report);
+        showRatingToastAfterDownload(file.jobId, file.name, reportData);
       }
     } else {
       // Download all - stagger to avoid popup blocker
       const completedFiles = batchFiles.filter((f) => f.jobId && f.fileState === 'complete');
+      pendingBatchDownloads = completedFiles.length;
       completedFiles.forEach((file, i) => {
         setTimeout(() => {
           const url = file.downloadUrl || getDownloadUrl(file.jobId!);
           triggerDownload(url, file.name);
+          pendingBatchDownloads--;
+          // Show rating toast after last download completes
+          if (pendingBatchDownloads === 0 && completedFiles.length > 0) {
+            const firstFile = completedFiles[0];
+            const reportData = buildReportFromBatchReport(firstFile.report);
+            showRatingToastAfterDownload(firstFile.jobId!, `${completedFiles.length} files`, reportData);
+          }
         }, i * 300); // 300ms delay between each download
       });
     }
@@ -682,6 +723,13 @@
       const zipUrl = URL.createObjectURL(zipBlob);
       triggerDownload(zipUrl, 'audiolevel-processed.zip');
       URL.revokeObjectURL(zipUrl);
+
+      // Show rating toast after ZIP download using first file's report
+      if (completedFiles.length > 0) {
+        const firstFile = completedFiles[0];
+        const reportData = buildReportFromBatchReport(firstFile.report);
+        showRatingToastAfterDownload(firstFile.jobId!, `${completedFiles.length} files (ZIP)`, reportData);
+      }
     } catch (err) {
       console.error('Failed to create ZIP:', err);
       errorMsg = 'Failed to create ZIP file';
@@ -700,6 +748,58 @@
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  }
+
+  // Show rating toast after download
+  function showRatingToastAfterDownload(jobId: string, name: string, report: SingleReportData) {
+    ratingJobId = jobId;
+    ratingFileName = name;
+    ratingReport = report;
+    showRatingToast = true;
+  }
+
+  // Handle rating submission
+  function handleRating(rating: 'up' | 'down') {
+    if (ratingJobId && ratingReport) {
+      const payload: RatingPayload = {
+        jobId: ratingJobId,
+        rating,
+        fileName: ratingFileName,
+        report: {
+          contentType: ratingReport.detectedAs,
+          contentConfidence: ratingReport.confidence,
+          qualityMethod: ratingReport.intelligentProcessing?.qualityMethod,
+          inputMetrics: {
+            lufs: ratingReport.before.integrated,
+            truePeak: ratingReport.before.truePeak,
+            lra: ratingReport.before.lra,
+          },
+          outputMetrics: {
+            lufs: ratingReport.after.integrated,
+            truePeak: ratingReport.after.truePeak,
+            lra: ratingReport.after.lra,
+          },
+          problemsDetected: ratingReport.intelligentProcessing?.problemsDetected.map(p => ({
+            problem: p.problem,
+            details: p.details,
+            severity: p.severity,
+          })),
+          processingApplied: ratingReport.intelligentProcessing?.processingApplied,
+          candidatesTested: ratingReport.intelligentProcessing?.candidatesTested,
+        },
+      };
+      submitRating(payload);
+    }
+    dismissRatingToast();
+  }
+
+  // Dismiss rating toast
+  function dismissRatingToast() {
+    showRatingToast = false;
+    ratingJobId = null;
+    ratingFileName = '';
+    ratingReport = null;
+    pendingBatchDownloads = 0;
   }
 
   function navigateBatchReport(index: number) {
@@ -1043,6 +1143,13 @@
       </div>
     {/if}
   </div>
+
+  <!-- Rating toast -->
+  <RatingToast
+    visible={showRatingToast}
+    onRate={handleRating}
+    onDismiss={dismissRatingToast}
+  />
 </div>
 
 <style>

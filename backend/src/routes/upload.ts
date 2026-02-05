@@ -256,4 +256,99 @@ upload.get('/job/:id/download', async (c) => {
   });
 });
 
+// Rating feedback endpoint
+upload.post('/rating', async (c) => {
+  const body = await c.req.json();
+
+  const { jobId, rating, fileName, report } = body;
+
+  // Validate required fields
+  if (!jobId || !rating || !fileName || !report) {
+    throw new AppError(400, 'Missing required fields', 'INVALID_RATING_PAYLOAD');
+  }
+
+  if (rating !== 'up' && rating !== 'down') {
+    throw new AppError(400, 'Invalid rating value', 'INVALID_RATING');
+  }
+
+  // Send to Discord webhook if configured
+  const webhookUrl = env.DISCORD_WEBHOOK_URL;
+  if (webhookUrl) {
+    const isPositive = rating === 'up';
+
+    // Build embed fields
+    const fields: { name: string; value: string; inline?: boolean }[] = [
+      { name: 'File Name', value: fileName.substring(0, 100) || 'Unknown', inline: true },
+      { name: 'Content Type', value: report.contentType || 'Unknown', inline: true },
+      { name: 'Confidence', value: report.contentConfidence || 'Unknown', inline: true },
+    ];
+
+    if (report.qualityMethod) {
+      fields.push({ name: 'Quality Method', value: report.qualityMethod, inline: true });
+    }
+
+    if (report.inputMetrics) {
+      fields.push({
+        name: 'Input Metrics',
+        value: `LUFS: ${report.inputMetrics.lufs}\nPeak: ${report.inputMetrics.truePeak}\nLRA: ${report.inputMetrics.lra}`,
+        inline: true,
+      });
+    }
+
+    if (report.outputMetrics) {
+      fields.push({
+        name: 'Output Metrics',
+        value: `LUFS: ${report.outputMetrics.lufs}\nPeak: ${report.outputMetrics.truePeak}\nLRA: ${report.outputMetrics.lra}`,
+        inline: true,
+      });
+    }
+
+    if (report.problemsDetected && report.problemsDetected.length > 0) {
+      const problemsList = report.problemsDetected
+        .slice(0, 5)
+        .map((p: { problem: string; severity?: string }) => `• ${p.problem}${p.severity ? ` (${p.severity})` : ''}`)
+        .join('\n');
+      fields.push({ name: 'Problems Detected', value: problemsList || 'None', inline: false });
+    }
+
+    if (report.processingApplied && report.processingApplied.length > 0) {
+      const processingList = report.processingApplied
+        .slice(0, 5)
+        .map((p: string) => `• ${p}`)
+        .join('\n');
+      fields.push({ name: 'Processing Applied', value: processingList || 'None', inline: false });
+    }
+
+    if (report.candidatesTested && report.candidatesTested.length > 0) {
+      const candidatesList = report.candidatesTested
+        .map((c: { name: string; score: number; isWinner: boolean }) =>
+          `• ${c.name}: ${c.score}${c.isWinner ? ' (winner)' : ''}`
+        )
+        .join('\n');
+      fields.push({ name: 'Candidates Tested', value: candidatesList, inline: false });
+    }
+
+    const embed = {
+      title: isPositive ? '👍 Positive Feedback' : '👎 Negative Feedback',
+      color: isPositive ? 0x22c55e : 0xef4444,
+      fields,
+      footer: { text: `Job ID: ${jobId}` },
+      timestamp: new Date().toISOString(),
+    };
+
+    // Fire-and-forget: send to Discord but don't wait/fail on errors
+    fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ embeds: [embed] }),
+    }).catch((err) => {
+      logger.warn({ err, jobId }, 'Failed to send rating to Discord');
+    });
+  }
+
+  logger.info({ jobId, rating, fileName }, 'Rating received');
+
+  return c.json({ success: true });
+});
+
 export default upload;

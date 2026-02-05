@@ -161,3 +161,47 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
 export function getDownloadUrl(jobId: string): string {
   return `${API_URL}/api/upload/job/${jobId}/download`;
 }
+
+export interface RatingPayload {
+  jobId: string;
+  rating: 'up' | 'down';
+  fileName: string;
+  report: {
+    contentType: string;
+    contentConfidence: string;
+    qualityMethod?: 'visqol' | 'spectral_fallback';
+    inputMetrics?: {
+      lufs: string;
+      truePeak: string;
+      lra: string;
+    };
+    outputMetrics?: {
+      lufs: string;
+      truePeak: string;
+      lra: string;
+    };
+    problemsDetected?: { problem: string; details: string; severity?: string }[];
+    processingApplied?: string[];
+    candidatesTested?: { name: string; score: number; isWinner: boolean }[];
+  };
+}
+
+export async function submitRating(payload: RatingPayload): Promise<void> {
+  try {
+    const response = await fetch(`${API_URL}/api/rating`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    // Fire-and-forget: don't throw on failure, just log
+    if (!response.ok) {
+      console.warn('Rating submission failed:', response.status);
+    }
+  } catch (err) {
+    // Silently fail - rating is non-critical
+    console.warn('Rating submission error:', err);
+  }
+}
