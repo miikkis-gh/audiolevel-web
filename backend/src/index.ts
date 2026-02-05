@@ -1,3 +1,4 @@
+import { mkdirSync, existsSync } from 'fs';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
@@ -24,6 +25,12 @@ import { checkVisqolAvailability } from './services/audioEvaluator';
 import { notifyServerError, notifyServerStart } from './services/discordNotifier';
 
 import { AppError, ERROR_MESSAGES } from './middleware/errorHandler';
+
+// Ensure data directory exists for estimator
+const dataDir = 'data';
+if (!existsSync(dataDir)) {
+  mkdirSync(dataDir, { recursive: true });
+}
 
 const app = new Hono();
 
