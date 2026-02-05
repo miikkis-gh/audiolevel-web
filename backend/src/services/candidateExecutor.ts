@@ -206,6 +206,9 @@ export async function convertToOutputFormat(
       case 'ogg':
         args.push('-codec:a', 'libvorbis', '-q:a', '6');
         break;
+      case 'opus':
+        args.push('-codec:a', 'libopus', '-b:a', '128k'); // High quality Opus
+        break;
       case 'wav':
         args.push('-codec:a', 'pcm_s16le'); // Standard WAV
         break;
@@ -215,7 +218,9 @@ export async function convertToOutputFormat(
 
     args.push('-ar', String(sampleRate), '-y', outputPath);
 
-    const result = await runCommand('ffmpeg', args, { timeoutMs: 60000 });
+    // Longer timeout for final conversion - 1 hour file at ~30x realtime = ~2 minutes
+    // Use 5 minutes for safety margin on slow systems
+    const result = await runCommand('ffmpeg', args, { timeoutMs: 300000 });
     return result.exitCode === 0;
   } catch (err) {
     log.error({ err, inputPath, outputPath }, 'Format conversion failed');
