@@ -61,7 +61,7 @@ Tests: `cd backend && bun test`
 
 ## License
 
-MIT
+Apache-2.0
 
 ---
 
