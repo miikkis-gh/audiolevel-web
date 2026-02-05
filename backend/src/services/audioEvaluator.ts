@@ -214,12 +214,16 @@ export async function checkVisqolAvailability(): Promise<boolean> {
   }
 
   try {
-    const { exitCode } = await runCommand(env.VISQOL_PATH, ['--help'], { timeoutMs: 5000 });
-    visqolAvailable = exitCode === 0;
+    // ViSQOL uses abseil flags which return exit code 1 for --help
+    // Check if binary runs and produces expected output instead
+    const { exitCode, stdout, stderr } = await runCommand(env.VISQOL_PATH, ['--help'], { timeoutMs: 5000 });
+    const output = stdout + stderr;
+    // ViSQOL is available if it outputs its description (even with exit code 1)
+    visqolAvailable = output.includes('Perceptual quality estimator');
     if (visqolAvailable) {
       log.info({ path: env.VISQOL_PATH }, 'ViSQOL is available');
     } else {
-      log.warn('ViSQOL binary found but returned error');
+      log.warn({ exitCode, output: output.slice(0, 200) }, 'ViSQOL binary found but unexpected output');
       visqolAvailable = false;
     }
   } catch {
