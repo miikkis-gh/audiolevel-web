@@ -865,7 +865,8 @@
   />
 
   <button class="branding" onclick={() => showAboutModal = true} aria-label="About AudioLevel">
-    AudioLevel
+    <span class="branding-text">AudioLevel</span>
+    <span class="branding-dot"></span>
   </button>
 
   {#if rejectMsg}
@@ -1208,6 +1209,22 @@
     cursor: pointer;
     transition: all 0.2s ease;
     pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .branding-text {
+    position: relative;
+  }
+
+  .branding-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(80, 210, 180, 0.6);
+    box-shadow: 0 0 8px rgba(80, 210, 180, 0.4);
+    animation: dotPulse 3s ease-in-out infinite;
   }
 
   .branding:hover {
@@ -1215,9 +1232,28 @@
     background: rgba(255, 255, 255, 0.04);
   }
 
+  .branding:hover .branding-dot {
+    background: rgba(80, 210, 180, 0.9);
+    box-shadow: 0 0 12px rgba(80, 210, 180, 0.6);
+    animation: none;
+  }
+
   .branding:focus-visible {
     outline: 2px solid rgba(80, 210, 180, 0.5);
     outline-offset: 2px;
+  }
+
+  @keyframes dotPulse {
+    0%, 100% {
+      opacity: 0.4;
+      transform: scale(1);
+      box-shadow: 0 0 6px rgba(80, 210, 180, 0.3);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.2);
+      box-shadow: 0 0 12px rgba(80, 210, 180, 0.6);
+    }
   }
 
   .reject-msg {
