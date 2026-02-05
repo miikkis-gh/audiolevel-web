@@ -107,3 +107,6 @@ export type {
   ProcessingReport,
   IntelligentProcessingCallbacks,
 } from '../services/intelligentProcessor';
+
+// Processing estimator types
+export * from './estimator';
