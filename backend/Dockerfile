@@ -95,7 +95,7 @@ RUN if [ -f /usr/local/visqol/visqol ]; then \
 
 # Environment variables
 ENV VISQOL_PATH=/usr/local/bin/visqol
-ENV VISQOL_MODEL_PATH=/usr/local/visqol/model/lattice_tcditugenmeetpackhref_ls2_nl60_lr12_bs2048_learn.005_ep2400_train1_7_raw.tflite
+ENV VISQOL_MODEL_PATH=/usr/local/visqol/model/libsvm_nu_svr_model.txt
 
 WORKDIR /app
 

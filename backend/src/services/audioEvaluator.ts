@@ -257,11 +257,12 @@ async function getVisqolScore(
 
   if (hasVisqol) {
     try {
-      // For audio mode, don't specify model - ViSQOL uses default SVR model
-      // The lattice/tflite models are only for speech mode
+      // Use SVR model for audio mode (lattice/tflite models are speech-only)
+      const svrModelPath = '/usr/local/visqol/model/libsvm_nu_svr_model.txt';
       const { stdout, stderr, exitCode } = await runCommand(env.VISQOL_PATH, [
         '--reference_file', originalPath,
         '--degraded_file', processedPath,
+        '--similarity_to_quality_model', svrModelPath,
       ], { timeoutMs: 60000 });
 
       if (exitCode === 0) {

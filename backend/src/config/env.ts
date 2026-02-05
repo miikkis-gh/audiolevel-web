@@ -13,7 +13,7 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default(''), // Comma-separated list of allowed origins
   // ViSQOL configuration
   VISQOL_PATH: z.string().default('visqol'), // Path to ViSQOL binary
-  VISQOL_MODEL_PATH: z.string().default('/usr/share/visqol/model/lattice_tcditugenmeetpackhref_ls2_nl60_lr12_bs2048_learn.005_ep2400_train1_7_raw.tflite'),
+  VISQOL_MODEL_PATH: z.string().default('/usr/local/visqol/model/libsvm_nu_svr_model.txt'),
   // Discord webhook for rating feedback
   DISCORD_WEBHOOK_URL: z.string().optional(),
 });
