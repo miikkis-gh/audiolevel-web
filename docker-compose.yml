@@ -27,7 +27,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - UPLOAD_DIR=/app/uploads
       - OUTPUT_DIR=/app/outputs
-      - MAX_FILE_SIZE=209715200
+      - MAX_FILE_SIZE=104857600
       - FILE_RETENTION_MINUTES=15
       - MAX_CONCURRENT_JOBS=4
       - PROCESSING_TIMEOUT_MS=300000
