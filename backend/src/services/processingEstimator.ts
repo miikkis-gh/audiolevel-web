@@ -2,6 +2,41 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import type { AnalysisMetrics } from '../types/analysis';
 import type { AudioFingerprint, ProcessingOutcome, SimilarMatch, EstimatorConfig, EstimatorStats } from '../types/estimator';
+import { env } from '../config/env';
+import { createChildLogger } from '../utils/logger';
+
+const log = createChildLogger({ service: 'processingEstimator' });
+
+/**
+ * Get estimator config from environment
+ */
+export function getEstimatorConfig(): EstimatorConfig {
+  return {
+    historyPath: env.ESTIMATOR_HISTORY_PATH,
+    statsPath: env.ESTIMATOR_STATS_PATH,
+    highThreshold: env.ESTIMATOR_HIGH_THRESHOLD,
+    moderateThreshold: env.ESTIMATOR_MODERATE_THRESHOLD,
+    maxHistory: env.ESTIMATOR_MAX_HISTORY,
+    enabled: env.ESTIMATOR_ENABLED,
+  };
+}
+
+/**
+ * Log a prediction result
+ */
+export function logPrediction(
+  predicted: string,
+  actual: string,
+  confidence: 'high' | 'moderate',
+  distance: number
+): void {
+  const correct = predicted === actual;
+  if (correct) {
+    log.info({ predicted, distance, confidence }, 'Prediction HIT');
+  } else {
+    log.info({ predicted, actual, distance, confidence }, 'Prediction MISS');
+  }
+}
 
 /**
  * Normalization ranges for each metric
