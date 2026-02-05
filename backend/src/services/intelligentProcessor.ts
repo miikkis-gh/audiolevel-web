@@ -225,14 +225,15 @@ export async function runIntelligentProcessing(
       winnerScore
     );
 
-    const duration = Date.now() - startTime;
+    const processingTimeMs = Date.now() - startTime;
+    const audioDuration = analysis.metrics.duration; // Audio duration in seconds
 
-    processorLog.info({ duration, winnerName: evaluation.winnerName }, 'Intelligent processing complete');
+    processorLog.info({ processingTimeMs, audioDuration, winnerName: evaluation.winnerName }, 'Intelligent processing complete');
 
     return {
       success: true,
       outputPath,
-      duration,
+      duration: audioDuration,
       analysis,
       evaluation,
       processingReport,
@@ -244,7 +245,7 @@ export async function runIntelligentProcessing(
     return {
       success: false,
       error: errorMessage,
-      duration: Date.now() - startTime,
+      duration: 0, // Unknown on failure
     };
   }
 }
