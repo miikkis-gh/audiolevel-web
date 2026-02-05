@@ -39,14 +39,14 @@ RUN git clone --depth 1 https://github.com/google/visqol.git
 
 # Build ViSQOL (suppress errors - build is optional)
 WORKDIR /build/visqol
-RUN bazel build -c opt //visqol:visqol 2>&1 || echo "ViSQOL build completed (may have warnings)"
+RUN bazel build :visqol -c opt 2>&1 || echo "ViSQOL build completed (may have warnings)"
 
 # Prepare output directory
 RUN mkdir -p /visqol-dist/model
 
 # Copy binary if build succeeded
-RUN if [ -f bazel-bin/visqol/visqol ]; then \
-        cp bazel-bin/visqol/visqol /visqol-dist/ && \
+RUN if [ -f bazel-bin/visqol ]; then \
+        cp bazel-bin/visqol /visqol-dist/ && \
         chmod +x /visqol-dist/visqol && \
         echo "ViSQOL binary copied successfully"; \
     else \

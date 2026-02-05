@@ -380,8 +380,8 @@ async function estimatePerceptualQuality(
   // Clamp to valid MOS range (1-5)
   score = Math.max(1, Math.min(5, score));
 
-  log.debug({
-    processedPath,
+  log.info({
+    processedPath: processedPath.split('/').pop(), // Just filename
     estimatedMos: score.toFixed(2),
     penalties,
     bonuses,

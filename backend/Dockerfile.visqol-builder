@@ -37,11 +37,11 @@ RUN git clone --depth 1 https://github.com/google/visqol.git
 
 # Build ViSQOL (this takes a long time)
 WORKDIR /build/visqol
-RUN bazel build -c opt //visqol:visqol
+RUN bazel build :visqol -c opt
 
 # Prepare distribution directory
 RUN mkdir -p /visqol-dist/model && \
-    cp bazel-bin/visqol/visqol /visqol-dist/ && \
+    cp bazel-bin/visqol /visqol-dist/ && \
     cp -r model/* /visqol-dist/model/ && \
     chmod +x /visqol-dist/visqol
 
