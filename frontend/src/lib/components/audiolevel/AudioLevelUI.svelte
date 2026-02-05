@@ -987,16 +987,13 @@
     </div>
   </div>
 
-  <!-- Info area below - fixed height to prevent layout shift -->
+  <!-- Info area below -->
   <div
     class="info-area"
     style="margin-top: {infoMarginTop}px; transition: margin-top 0.6s cubic-bezier(0.4, 0, 0.2, 1);"
   >
-    <div
-      class="info-content"
-      class:active={mode === 'idle'}
-    >
-      {#if mode === 'idle'}
+    {#if mode === 'idle'}
+      <div class="info-content">
         <div class="idle-label">
           {dragOver ? 'Release to process' : 'Drop audio files or click'}
         </div>
@@ -1005,26 +1002,16 @@
           Drop files → auto-detect content type → download processed audio.<br />
           <span class="explainer-hint">After processing, tap the icon in the bottom right for a detailed analysis report.</span>
         </div>
-      {/if}
-    </div>
-
-    <div
-      class="info-content"
-      class:active={mode === 'processing'}
-    >
-      {#if mode === 'processing'}
+      </div>
+    {:else if mode === 'processing'}
+      <div class="info-content">
         <div role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
           <div class="progress-num">{progress}%</div>
           <div class="stage-label">{getStageLabel(progress)}</div>
         </div>
-      {/if}
-    </div>
-
-    <div
-      class="info-content"
-      class:active={mode === 'complete'}
-    >
-      {#if mode === 'complete'}
+      </div>
+    {:else if mode === 'complete'}
+      <div class="info-content">
         <div class="complete-area">
           <div class="file-name">{fileName}</div>
           <button class="download-btn" onclick={handleDownload}>
@@ -1060,46 +1047,26 @@
             />
           {/if}
         </div>
-      {/if}
-    </div>
-
-    <div
-      class="info-content"
-      class:active={mode === 'splitting'}
-    >
-      {#if mode === 'splitting'}
+      </div>
+    {:else if mode === 'splitting'}
+      <div class="info-content">
         <div class="stage-label" style="animation: fadeUp 0.4s ease-out">
           Preparing {batchFiles.length} files
         </div>
-      {/if}
-    </div>
-
-    <div
-      class="info-content"
-      class:active={mode === 'batch'}
-    >
-      {#if mode === 'batch'}
+      </div>
+    {:else if mode === 'batch'}
+      <div class="info-content">
         <div role="progressbar" aria-valuenow={overallProg} aria-valuemin={0} aria-valuemax={100}>
           <div class="progress-num">{overallProg}%</div>
           <div class="stage-label">{doneCount} of {batchFiles.length} complete</div>
         </div>
-      {/if}
-    </div>
-
-    <div
-      class="info-content"
-      class:active={mode === 'merging'}
-    >
-      {#if mode === 'merging'}
+      </div>
+    {:else if mode === 'merging'}
+      <div class="info-content">
         <div class="stage-label" style="animation: fadeUp 0.3s ease-out">Finalizing batch</div>
-      {/if}
-    </div>
-
-    <div
-      class="info-content"
-      class:active={mode === 'batch-complete'}
-    >
-      {#if mode === 'batch-complete'}
+      </div>
+    {:else if mode === 'batch-complete'}
+      <div class="info-content">
         <div class="complete-area">
           <div class="file-name">{batchFiles.filter(f => f.fileState === 'complete').length} of {batchFiles.length} files processed</div>
           <div class="download-dropdown">
@@ -1160,8 +1127,8 @@
             />
           {/if}
         </div>
-      {/if}
-    </div>
+      </div>
+    {/if}
   </div>
 
   <!-- Report trigger -->
@@ -1471,19 +1438,7 @@
   }
 
   .info-content {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
     text-align: center;
-    display: none;
-    pointer-events: none;
-  }
-
-  .info-content.active {
-    display: block;
-    pointer-events: auto;
-    animation: fadeUp 0.4s ease-out;
   }
 
   .idle-label {
