@@ -3,6 +3,7 @@ import { getRedisClient } from '../services/redis';
 import { verifyDependencies } from '../services/audioProcessor';
 import { runIntelligentProcessing } from '../services/intelligentProcessor';
 import { notifyJobFailure } from '../services/discordNotifier';
+import { AppError } from '../middleware/errorHandler';
 import { env } from '../config/env';
 import { logger, createChildLogger } from '../utils/logger';
 import { emitJobProgress, emitJobComplete, emitJobError } from '../websocket/events';
@@ -232,10 +233,14 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
   });
 
   audioWorker.on('failed', (job, err) => {
+    // Extract error code from AppError or use default
+    const errorCode = err instanceof AppError ? err.code : 'PROCESSING_FAILED';
+
     logger.error(
       {
         jobId: job?.data.jobId,
         error: err.message,
+        errorCode,
         attemptsMade: job?.attemptsMade,
       },
       'Job failed'
@@ -243,14 +248,15 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
 
     // Emit WebSocket event for error
     if (job) {
-      emitJobError(job.data.jobId, err.message, 'PROCESSING_FAILED');
+      emitJobError(job.data.jobId, err.message, errorCode || 'PROCESSING_FAILED');
 
       // Send Discord notification (fire-and-forget)
       notifyJobFailure(
         job.data.jobId,
         job.data.originalName,
         err.message,
-        job.attemptsMade
+        job.attemptsMade,
+        errorCode
       );
     }
   });

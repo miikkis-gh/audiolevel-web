@@ -10,6 +10,7 @@
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { getHourlyActivity, getActivityStats } from './activityStats';
+import { AppError, ERROR_MESSAGES } from '../middleware/errorHandler';
 
 interface DiscordEmbed {
   title: string;
@@ -47,17 +48,36 @@ export async function notifyJobFailure(
   jobId: string,
   fileName: string,
   error: string,
-  attemptsMade?: number
+  attemptsMade?: number,
+  errorCode?: string
 ): Promise<void> {
+  // Look up hint from error code if available
+  const errorInfo = errorCode ? ERROR_MESSAGES[errorCode] : undefined;
+  const hint = errorInfo?.hint;
+
+  const fields: DiscordEmbed['fields'] = [
+    { name: 'Job ID', value: jobId, inline: true },
+    { name: 'File', value: fileName.substring(0, 100) || 'Unknown', inline: true },
+    { name: 'Attempts', value: String(attemptsMade || 1), inline: true },
+  ];
+
+  // Add error code if available
+  if (errorCode) {
+    fields.push({ name: 'Code', value: `\`${errorCode}\``, inline: true });
+  }
+
+  // Add error message
+  fields.push({ name: 'Error', value: error.substring(0, 1000) || 'Unknown error' });
+
+  // Add hint if available
+  if (hint) {
+    fields.push({ name: '💡 Hint', value: hint });
+  }
+
   const embed: DiscordEmbed = {
     title: '❌ Job Processing Failed',
     color: 0xef4444, // Red
-    fields: [
-      { name: 'Job ID', value: jobId, inline: true },
-      { name: 'File', value: fileName.substring(0, 100) || 'Unknown', inline: true },
-      { name: 'Attempts', value: String(attemptsMade || 1), inline: true },
-      { name: 'Error', value: error.substring(0, 1000) || 'Unknown error' },
-    ],
+    fields,
     footer: { text: 'AudioLevel Error Monitor' },
     timestamp: new Date().toISOString(),
   };
@@ -74,19 +94,37 @@ export async function notifyServerError(
     endpoint?: string;
     method?: string;
     userId?: string;
+    code?: string;
   }
 ): Promise<void> {
   const errorMessage = error instanceof Error ? error.message : error;
   const errorStack = error instanceof Error ? error.stack?.substring(0, 500) : undefined;
 
-  const fields: { name: string; value: string; inline?: boolean }[] = [
-    { name: 'Error', value: errorMessage.substring(0, 1000) || 'Unknown error' },
-  ];
+  // Extract code and hint from AppError or context
+  const errorCode = error instanceof AppError ? error.code : context?.code;
+  const hint = error instanceof AppError ? error.hint : (errorCode ? ERROR_MESSAGES[errorCode]?.hint : undefined);
 
+  const fields: { name: string; value: string; inline?: boolean }[] = [];
+
+  // Add endpoint first if available
   if (context?.endpoint) {
     fields.push({ name: 'Endpoint', value: `${context.method || 'GET'} ${context.endpoint}`, inline: true });
   }
 
+  // Add error code if available
+  if (errorCode) {
+    fields.push({ name: 'Code', value: `\`${errorCode}\``, inline: true });
+  }
+
+  // Add error message
+  fields.push({ name: 'Error', value: errorMessage.substring(0, 1000) || 'Unknown error' });
+
+  // Add hint if available
+  if (hint) {
+    fields.push({ name: '💡 Hint', value: hint });
+  }
+
+  // Add stack trace last
   if (errorStack) {
     fields.push({ name: 'Stack Trace', value: `\`\`\`\n${errorStack}\n\`\`\`` });
   }
