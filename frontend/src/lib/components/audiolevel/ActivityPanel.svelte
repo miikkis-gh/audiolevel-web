@@ -368,8 +368,8 @@
   }
 
   .content-tag.music {
-    background: rgba(147, 112, 219, 0.15);
-    color: rgba(177, 142, 249, 0.9);
+    background: rgba(100, 180, 255, 0.15);
+    color: rgba(100, 180, 255, 0.9);
   }
 
   .content-tag.speech {
@@ -427,7 +427,7 @@
 
   .genre-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, rgba(147, 112, 219, 0.6), rgba(147, 112, 219, 0.9));
+    background: linear-gradient(90deg, rgba(100, 180, 255, 0.6), rgba(100, 180, 255, 0.9));
     border-radius: 2px;
     transition: width 0.3s ease;
   }
