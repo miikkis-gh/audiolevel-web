@@ -24,6 +24,9 @@
 
   let canvasEl: HTMLCanvasElement;
 
+  // Reactive state for glow pulsing (updated from animation loop)
+  let glowPulse = $state(0);
+
   // Non-reactive refs for animation loop
   let targetProgress = progress;
   let displayProgress = 0; // Smoothly interpolated progress for animation
@@ -149,6 +152,10 @@
           const rawBeat = Math.sin(frameCount * 0.209);
           // Shape the wave: fast attack, slower decay
           beatPulse = rawBeat > 0 ? Math.pow(rawBeat, 0.6) * 0.4 : 0;
+          // Update reactive glow pulse for box-shadow (throttle to every 2 frames)
+          if (frameCount % 2 === 0) glowPulse = beatPulse;
+        } else if (glowPulse !== 0) {
+          glowPulse = 0;
         }
 
         for (let i = 0; i < n; i++) {
@@ -213,13 +220,23 @@
           : 'aurora'
   );
 
-  // Dynamic glow for profile-colored spheres (only during processing, not complete)
+  // Dynamic glow for profile-colored spheres and beat pulse during processing
   let coreStyle = $derived.by(() => {
     let style = `width: ${size}px; height: ${size}px;`;
-    if (profileColor && pState === 'processing') {
-      const [r, g, b] = profileColor;
-      style += `box-shadow: 0 0 50px rgba(${r},${g},${b},0.24), 0 0 100px rgba(${r},${g},${b},0.1);`;
-      style += `background: radial-gradient(circle at 36% 32%, rgba(${r},${g},${b},.18) 0%, rgba(${(r / 3) | 0},${(g / 3) | 0},${(b / 3) | 0},.42) 35%, rgba(12,18,40,.92) 70%, rgba(6,7,11,1) 100%);`;
+    if (pState === 'processing') {
+      const pulse = glowPulse;
+      if (profileColor) {
+        const [r, g, b] = profileColor;
+        const baseAlpha1 = 0.24 + pulse * 0.3;
+        const baseAlpha2 = 0.1 + pulse * 0.15;
+        style += `box-shadow: 0 0 ${50 + pulse * 20}px rgba(${r},${g},${b},${baseAlpha1}), 0 0 ${100 + pulse * 30}px rgba(${r},${g},${b},${baseAlpha2});`;
+        style += `background: radial-gradient(circle at 36% 32%, rgba(${r},${g},${b},.18) 0%, rgba(${(r / 3) | 0},${(g / 3) | 0},${(b / 3) | 0},.42) 35%, rgba(12,18,40,.92) 70%, rgba(6,7,11,1) 100%);`;
+      } else {
+        // Default cyan glow with pulse
+        const baseAlpha1 = 0.3 + pulse * 0.35;
+        const baseAlpha2 = 0.12 + pulse * 0.15;
+        style += `box-shadow: 0 0 ${50 + pulse * 20}px rgba(60,180,220,${baseAlpha1}), 0 0 ${100 + pulse * 30}px rgba(60,180,220,${baseAlpha2});`;
+      }
     }
     return style;
   });
