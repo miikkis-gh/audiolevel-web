@@ -15,14 +15,14 @@
   }
 
   const techStack = [
-    { name: 'FFmpeg', role: 'The audio wizard doing all the heavy lifting', icon: '🎬' },
-    { name: 'SoX', role: 'Sound eXchange for spectral analysis', icon: '📊' },
-    { name: 'ViSQOL', role: 'Perceptual quality scoring (when available)', icon: '👂' },
-    { name: 'Bun', role: 'Speedy runtime for backend & frontend', icon: '🥟' },
-    { name: 'Hono', role: 'Lightweight API framework', icon: '🔥' },
-    { name: 'SvelteKit', role: 'Reactive UI with minimal overhead', icon: '🧡' },
-    { name: 'Redis + BullMQ', role: 'Job queue for processing pipeline', icon: '📨' },
-    { name: 'WebGL', role: 'That fancy particle sphere you see', icon: '✨' },
+    { name: 'FFmpeg', role: 'The audio wizard doing all the heavy lifting', icon: '🎬', url: 'https://ffmpeg.org' },
+    { name: 'SoX', role: 'Sound eXchange for spectral analysis', icon: '📊', url: 'https://sox.sourceforge.net' },
+    { name: 'ViSQOL', role: 'Perceptual quality scoring (when available)', icon: '👂', url: 'https://github.com/google/visqol' },
+    { name: 'Bun', role: 'Speedy runtime for backend & frontend', icon: '🥟', url: 'https://bun.sh' },
+    { name: 'Hono', role: 'Lightweight API framework', icon: '🔥', url: 'https://hono.dev' },
+    { name: 'SvelteKit', role: 'Reactive UI with minimal overhead', icon: '🧡', url: 'https://svelte.dev' },
+    { name: 'Redis + BullMQ', role: 'Job queue for processing pipeline', icon: '📨', url: 'https://redis.io' },
+    { name: 'WebGL', role: 'That fancy particle sphere you see', icon: '✨', url: 'https://www.khronos.org/webgl/' },
   ];
 </script>
 
@@ -56,9 +56,16 @@
         <ul class="tech-list">
           {#each techStack as tech}
             <li>
-              <span class="tech-icon">{tech.icon}</span>
-              <span class="tech-name">{tech.name}</span>
-              <span class="tech-role">{tech.role}</span>
+              <a href={tech.url} target="_blank" rel="noopener noreferrer" class="tech-link">
+                <span class="tech-icon">{tech.icon}</span>
+                <span class="tech-name">{tech.name}</span>
+                <span class="tech-role">{tech.role}</span>
+                <svg class="tech-external" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </a>
             </li>
           {/each}
         </ul>
@@ -221,17 +228,41 @@
   }
 
   .tech-list li {
+    list-style: none;
+  }
+
+  .tech-link {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 8px 12px;
     background: rgba(255, 255, 255, 0.03);
     border-radius: 10px;
-    transition: background 0.2s ease;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    color: inherit;
   }
 
-  .tech-list li:hover {
-    background: rgba(255, 255, 255, 0.05);
+  .tech-link:hover {
+    background: rgba(80, 210, 180, 0.08);
+    transform: translateX(4px);
+  }
+
+  .tech-link:hover .tech-name {
+    color: rgba(80, 210, 180, 0.95);
+  }
+
+  .tech-link:hover .tech-external {
+    opacity: 1;
+    color: rgba(80, 210, 180, 0.7);
+  }
+
+  .tech-external {
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    color: rgba(255, 255, 255, 0.3);
+    flex-shrink: 0;
   }
 
   .tech-icon {
