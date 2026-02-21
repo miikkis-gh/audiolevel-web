@@ -459,7 +459,7 @@ function scoreCandidate(
 /**
  * Pick the winning candidate
  */
-function pickWinner(scores: CandidateScore[], contentType: ContentType, qualityMethod: QualityMethod): EvaluationResult {
+function pickWinner(scores: CandidateScore[], contentType: ContentType, qualityMethod: 'spectral'): EvaluationResult {
   // Filter to candidates that passed safety
   const safe = scores.filter(s => s.passedSafety);
 
