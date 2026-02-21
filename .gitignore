@@ -54,6 +54,13 @@ bun.lockb
 # Redis dump
 dump.rdb
 
+# Runtime data
+backend/data/
+
+# Deployment/infrastructure docs (contain secrets)
+audiolevel_coolify.md
+setup-summary.md
+
 # Internal documentation
 CLAUDE.md
 MILESTONES.md
