@@ -498,10 +498,10 @@
     showReport = false;
     mode = 'splitting';
 
-    // Upload all files
-    for (let i = 0; i < files.length; i++) {
+    // Upload all files in parallel
+    await Promise.all(files.map(async (file, i) => {
       try {
-        const response = await uploadFile(files[i]);
+        const response = await uploadFile(file);
         batchFiles = batchFiles.map((f, idx) => {
           if (idx === i) {
             return { ...f, jobId: response.jobId };
@@ -518,7 +518,7 @@
           return f;
         });
       }
-    }
+    }));
   }
 
   function showReject(count: number) {
