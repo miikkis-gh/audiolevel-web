@@ -98,13 +98,8 @@ async function processAudioJob(
       throw new Error(result.error || 'Unknown processing error');
     }
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     log.error({ err }, 'Job processing error');
-
-    return {
-      success: false,
-      error: errorMessage,
-    };
+    throw err;
   }
 }
 
@@ -222,8 +217,8 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
       'Job completed'
     );
 
-    // Emit WebSocket event for completion or error
-    if (result.success && result.outputPath) {
+    // Emit WebSocket event for completion
+    if (result.outputPath) {
       emitJobComplete(job.data.jobId, {
         downloadUrl: `/api/upload/job/${job.data.jobId}/download`,
         duration: result.duration,
@@ -231,8 +226,6 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
         outputLufs: result.outputAnalysis?.inputLufs,
         processingReport: result.processingReport,
       });
-    } else if (!result.success) {
-      emitJobError(job.data.jobId, result.error || 'Processing failed', 'PROCESSING_FAILED');
     }
   });
 
