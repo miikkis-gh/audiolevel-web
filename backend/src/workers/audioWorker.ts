@@ -222,7 +222,7 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
       'Job completed'
     );
 
-    // Emit WebSocket event for completion
+    // Emit WebSocket event for completion or error
     if (result.success && result.outputPath) {
       emitJobComplete(job.data.jobId, {
         downloadUrl: `/api/upload/job/${job.data.jobId}/download`,
@@ -231,6 +231,8 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
         outputLufs: result.outputAnalysis?.inputLufs,
         processingReport: result.processingReport,
       });
+    } else if (!result.success) {
+      emitJobError(job.data.jobId, result.error || 'Processing failed', 'PROCESSING_FAILED');
     }
   });
 

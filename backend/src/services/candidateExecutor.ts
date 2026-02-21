@@ -82,7 +82,7 @@ export async function executeCandidate(
       '-i', inputPath,
       '-af', candidate.filterChain,
       '-ar', String(options.sampleRate), // Preserve sample rate
-      '-sample_fmt', getSampleFormat(options.bitDepth), // Preserve bit depth
+      '-codec:a', getPcmCodec(options.bitDepth), // Explicit codec for bit depth
       '-y', // Overwrite output
       outputPath,
     ];
@@ -252,19 +252,21 @@ export async function convertToOutputFormat(
 }
 
 /**
- * Get FFmpeg sample format string for bit depth
+ * Get PCM codec name for a given bit depth.
+ * Using an explicit codec avoids conflicts between -sample_fmt and
+ * the auto-selected WAV encoder (e.g. pcm_s16le rejects s32 format).
  */
-function getSampleFormat(bitDepth: number): string {
+function getPcmCodec(bitDepth: number): string {
   switch (bitDepth) {
     case 8:
-      return 'u8';
+      return 'pcm_u8';
     case 16:
-      return 's16';
+      return 'pcm_s16le';
     case 24:
-      return 's32'; // FFmpeg uses s32 for 24-bit in WAV
+      return 'pcm_s24le';
     case 32:
-      return 's32';
+      return 'pcm_s32le';
     default:
-      return 's16';
+      return 'pcm_s16le';
   }
 }
