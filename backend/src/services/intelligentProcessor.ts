@@ -12,7 +12,7 @@
  */
 
 import { join, dirname, extname } from 'path';
-import { mkdir, copyFile, unlink } from 'fs/promises';
+import { mkdir, copyFile, rm } from 'fs/promises';
 import { env } from '../config/env';
 import { createChildLogger } from '../utils/logger';
 import { analyzeAudio } from './audioAnalyzer';
@@ -312,7 +312,7 @@ export async function runIntelligentProcessing(
     // Cleanup intermediate files
     await cleanupCandidateFiles(results);
     try {
-      await unlink(workDir).catch(() => {}); // Best effort cleanup
+      await rm(workDir, { recursive: true }).catch(() => {}); // Best effort cleanup
     } catch {
       // Ignore cleanup errors
     }

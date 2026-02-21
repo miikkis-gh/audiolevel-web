@@ -347,13 +347,7 @@ export function getWsUrl(): string {
 
 export function getWebSocketClient(): WebSocketClient {
   if (!wsClient) {
-    // Use environment variable if set, otherwise construct from current location
-    let wsUrl = import.meta.env.VITE_WS_URL;
-    if (!wsUrl) {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      wsUrl = `${protocol}//${window.location.host}/ws`;
-    }
-    wsClient = new WebSocketClient(wsUrl);
+    wsClient = new WebSocketClient(getWsUrl());
   }
   return wsClient;
 }

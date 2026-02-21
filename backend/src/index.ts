@@ -100,9 +100,8 @@ app.route('/api/upload', uploadRoutes);
 app.route('/api/stats', statsRoutes);
 
 // Job status route (alias for convenience)
-app.get('/api/job/:id', async (c) => {
-  const response = await fetch(`http://localhost:${env.PORT}/api/upload/job/${c.req.param('id')}`);
-  return response;
+app.get('/api/job/:id', (c) => {
+  return c.redirect(`/api/upload/job/${c.req.param('id')}`);
 });
 
 // Root endpoint
