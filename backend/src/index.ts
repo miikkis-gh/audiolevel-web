@@ -82,7 +82,11 @@ app.use(
       if (allowedOrigins.length > 0) {
         return allowedOrigins.includes(origin || '') ? origin : null;
       }
-      // Fallback: allow origin (requests go through reverse proxy)
+      // In production, require explicit CORS_ORIGINS configuration
+      if (env.NODE_ENV === 'production') {
+        return null;
+      }
+      // Development fallback: allow any origin
       return origin || null;
     },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
