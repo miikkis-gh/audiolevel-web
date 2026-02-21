@@ -11,9 +11,6 @@ const envSchema = z.object({
   PROCESSING_TIMEOUT_MS: z.coerce.number().default(300000), // 5 minutes
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   CORS_ORIGINS: z.string().default(''), // Comma-separated list of allowed origins
-  // ViSQOL configuration
-  VISQOL_PATH: z.string().default('visqol'), // Path to ViSQOL binary
-  VISQOL_MODEL_PATH: z.string().default('/usr/local/visqol/model/libsvm_nu_svr_model.txt'),
   // Processing estimator configuration
   ESTIMATOR_ENABLED: z.coerce.boolean().default(true),
   ESTIMATOR_HISTORY_PATH: z.string().default('data/processing-history.json'),

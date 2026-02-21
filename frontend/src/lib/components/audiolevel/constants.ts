@@ -29,7 +29,7 @@ export interface IntelligentProcessingReport {
   candidatesTested: CandidateTested[];
   winnerReason: string;
   /** Method used for perceptual quality scoring */
-  qualityMethod?: 'visqol' | 'spectral_fallback';
+  qualityMethod?: 'spectral';
 }
 
 export interface SingleReportData {

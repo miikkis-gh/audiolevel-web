@@ -9,7 +9,7 @@ import type { ContentType } from './analysis';
 /**
  * Method used for perceptual quality measurement
  */
-export type QualityMethod = 'visqol' | 'spectral_fallback';
+export type QualityMethod = 'spectral';
 
 /**
  * Metrics measured on a processed candidate
@@ -24,8 +24,8 @@ export interface CandidateMetrics {
   /** True peak (dBTP) */
   truePeak: number;
 
-  /** ViSQOL perceptual quality score (1-5 MOS) */
-  visqolScore: number;
+  /** Perceptual quality score (1-5 MOS scale) */
+  perceptualScore: number;
 
   /** Signal-to-noise ratio estimate (dB) */
   snrEstimate: number;
@@ -110,8 +110,8 @@ export interface EvaluationConfig {
   /** Acceptable LRA range [min, max] */
   acceptableLraRange: [number, number];
 
-  /** Minimum ViSQOL score to pass (1-5) */
-  minimumVisqol: number;
+  /** Minimum perceptual quality score to pass (1-5) */
+  minimumPerceptualScore: number;
 
   /** Maximum true peak to pass (dBTP) */
   maximumTruePeak: number;

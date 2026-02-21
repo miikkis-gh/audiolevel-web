@@ -137,9 +137,7 @@
         {#if ip.qualityMethod}
           <div class="quality-method">
             <span class="method-label">Quality scoring:</span>
-            <span class="method-value" class:is-visqol={ip.qualityMethod === 'visqol'}>
-              {ip.qualityMethod === 'visqol' ? 'ViSQOL' : 'Spectral Analysis'}
-            </span>
+            <span class="method-value">Spectral Analysis</span>
           </div>
         {/if}
       </div>
@@ -561,9 +559,5 @@
     font-family: 'Outfit', sans-serif;
     font-size: 12px;
     color: rgba(255, 180, 80, 0.7);
-  }
-
-  .method-value.is-visqol {
-    color: rgba(80, 210, 180, 0.8);
   }
 </style>

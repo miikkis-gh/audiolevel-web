@@ -68,8 +68,8 @@ export interface ProcessingReport {
   processingApplied: string[];
   candidatesTested: { name: string; score: number; isWinner: boolean }[];
   winnerReason: string;
-  /** Method used for perceptual quality scoring ('visqol' or 'spectral_fallback') */
-  qualityMethod: 'visqol' | 'spectral_fallback';
+  /** Method used for perceptual quality scoring */
+  qualityMethod: 'spectral';
   /** Genre guess for music content */
   genreGuess?: { broad: string; confidence: 'low' | 'medium' | 'high' };
   inputMetrics: {

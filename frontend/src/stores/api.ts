@@ -48,7 +48,7 @@ export interface ProcessingReport {
   candidatesTested: { name: string; score: number; isWinner: boolean }[];
   winnerReason: string;
   /** Method used for perceptual quality scoring */
-  qualityMethod?: 'visqol' | 'spectral_fallback';
+  qualityMethod?: 'spectral';
   /** Genre guess for music content */
   genreGuess?: GenreGuess;
 }
@@ -193,7 +193,7 @@ export interface RatingPayload {
   report: {
     contentType: string;
     contentConfidence: string;
-    qualityMethod?: 'visqol' | 'spectral_fallback';
+    qualityMethod?: 'spectral';
     inputMetrics?: {
       lufs: string;
       truePeak: string;

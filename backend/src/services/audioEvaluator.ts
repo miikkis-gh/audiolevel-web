@@ -18,7 +18,6 @@ import type {
   EvaluationResult,
   EvaluationConfig,
   ScoringWeights,
-  QualityMethod,
 } from '../types/evaluation';
 import type { CandidateProcessingResult } from './candidateExecutor';
 
@@ -164,7 +163,7 @@ async function measureMetrics(
   ]);
 
   // Opt 3: Pure synchronous quality scoring (no FFmpeg calls)
-  const visqolScore = computePerceptualQuality(
+  const perceptualScore = computePerceptualQuality(
     { loudness, spectral },
     originalMetrics,
     processedPath
@@ -174,9 +173,9 @@ async function measureMetrics(
     integratedLufs: loudness.integratedLufs,
     loudnessRange: loudness.loudnessRange,
     truePeak: loudness.truePeak,
-    visqolScore,
+    perceptualScore,
     snrEstimate,
-    qualityMethod: 'spectral_fallback',
+    qualityMethod: 'spectral',
   };
 }
 
@@ -234,87 +233,6 @@ async function estimateSnr(filePath: string): Promise<number> {
   }
 
   return 20; // Default estimate
-}
-
-// Track ViSQOL availability
-let visqolAvailable: boolean | null = null;
-
-/**
- * Check if ViSQOL is available on the system
- */
-export async function checkVisqolAvailability(): Promise<boolean> {
-  if (visqolAvailable !== null) {
-    return visqolAvailable;
-  }
-
-  try {
-    // ViSQOL uses abseil flags which return exit code 1 for --help
-    // Check if binary runs and produces expected output instead
-    const { exitCode, stdout, stderr } = await runCommand(env.VISQOL_PATH, ['--help'], { timeoutMs: 5000 });
-    const output = stdout + stderr;
-    // ViSQOL is available if it outputs its description (even with exit code 1)
-    visqolAvailable = output.includes('Perceptual quality estimator');
-    if (visqolAvailable) {
-      log.info({ path: env.VISQOL_PATH }, 'ViSQOL is available');
-    } else {
-      log.warn({ exitCode, output: output.slice(0, 200) }, 'ViSQOL binary found but unexpected output');
-      visqolAvailable = false;
-    }
-  } catch {
-    log.info('ViSQOL not available - using FFmpeg spectral analysis fallback');
-    visqolAvailable = false;
-  }
-
-  return visqolAvailable;
-}
-
-/**
- * Result of perceptual quality measurement
- */
-interface QualityResult {
-  score: number;
-  method: QualityMethod;
-}
-
-/**
- * Get perceptual quality score using spectral analysis
- *
- * ViSQOL is disabled due to performance constraints on low-resource servers.
- * Spectral analysis provides fast, reliable quality estimation by comparing:
- * - Dynamic range preservation
- * - Tonal balance (spectral centroid)
- * - High-frequency energy
- * - Artifact detection (spectral flatness changes)
- */
-async function getVisqolScore(
-  processedPath: string,
-  originalPath: string
-): Promise<QualityResult> {
-  // Use spectral analysis - fast and reliable for all file lengths
-  const score = await estimatePerceptualQuality(processedPath, originalPath);
-  return { score, method: 'spectral_fallback' };
-}
-
-/**
- * Convenience async wrapper that fetches data then calls the pure scoring function.
- * Kept for standalone use outside the optimized evaluation pipeline.
- */
-async function estimatePerceptualQuality(
-  processedPath: string,
-  originalPath: string
-): Promise<number> {
-  const [processedLoudness, originalLoudness, processedSpectral, originalSpectral] = await Promise.all([
-    getLoudnessMetrics(processedPath),
-    getLoudnessMetrics(originalPath),
-    getSpectralMetrics(processedPath),
-    getSpectralMetrics(originalPath),
-  ]);
-
-  return computePerceptualQuality(
-    { loudness: processedLoudness, spectral: processedSpectral },
-    { loudness: originalLoudness, spectral: originalSpectral },
-    processedPath
-  );
 }
 
 /**
@@ -498,8 +416,8 @@ function scoreCandidate(
   const snrImprovement = metrics.snrEstimate - config.inputSnrEstimate;
   const noiseReduction = Math.min(100, 50 + (snrImprovement * 5));
 
-  // Perceptual quality: ViSQOL score scaled to 0-100
-  const perceptualQuality = ((metrics.visqolScore - 1) / 4) * 100;
+  // Perceptual quality: score scaled to 0-100
+  const perceptualQuality = ((metrics.perceptualScore - 1) / 4) * 100;
 
   // Calculate weighted total
   const totalScore =
@@ -516,9 +434,9 @@ function scoreCandidate(
   if (metrics.truePeak > -0.5) {
     passedSafety = false;
     rejectionReason = `True peak too high: ${metrics.truePeak.toFixed(1)} dBTP`;
-  } else if (metrics.visqolScore < config.minimumVisqol) {
+  } else if (metrics.perceptualScore < config.minimumPerceptualScore) {
     passedSafety = false;
-    rejectionReason = `Perceptual quality too low: ${metrics.visqolScore.toFixed(2)} MOS`;
+    rejectionReason = `Perceptual quality too low: ${metrics.perceptualScore.toFixed(2)} MOS`;
   }
 
   return {
@@ -637,7 +555,7 @@ export function createEvaluationConfig(
     targetLufs: isSpeech ? -16 : -14,
     targetTruePeak: isSpeech ? -1.5 : -1,
     acceptableLraRange: isSpeech ? [6, 15] : [8, 20],
-    minimumVisqol: 3.0,
+    minimumPerceptualScore: 3.0,
     maximumTruePeak: -0.5,
     inputSnrEstimate,
   };

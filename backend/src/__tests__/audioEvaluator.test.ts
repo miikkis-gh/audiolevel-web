@@ -14,7 +14,7 @@ describe('Audio Evaluator', () => {
       expect(config.targetLufs).toBe(-16);
       expect(config.targetTruePeak).toBe(-1.5);
       expect(config.acceptableLraRange).toEqual([6, 15]);
-      expect(config.minimumVisqol).toBe(3.0);
+      expect(config.minimumPerceptualScore).toBe(3.0);
       expect(config.maximumTruePeak).toBe(-0.5);
     });
 
@@ -24,7 +24,7 @@ describe('Audio Evaluator', () => {
       expect(config.targetLufs).toBe(-14);
       expect(config.targetTruePeak).toBe(-1);
       expect(config.acceptableLraRange).toEqual([8, 20]);
-      expect(config.minimumVisqol).toBe(3.0);
+      expect(config.minimumPerceptualScore).toBe(3.0);
       expect(config.maximumTruePeak).toBe(-0.5);
     });
 
@@ -199,13 +199,13 @@ describe('Audio Evaluator', () => {
       expect(safeCandidate.truePeak).toBeLessThanOrEqual(-0.5);
     });
 
-    test('quality filter rejects ViSQOL scores below 3.0', () => {
-      const lowQuality = { visqolScore: 2.5 };
-      const acceptableQuality = { visqolScore: 3.5 };
-      const minimumVisqol = 3.0;
+    test('quality filter rejects perceptual scores below 3.0', () => {
+      const lowQuality = { perceptualScore: 2.5 };
+      const acceptableQuality = { perceptualScore: 3.5 };
+      const minimumPerceptualScore = 3.0;
 
-      expect(lowQuality.visqolScore).toBeLessThan(minimumVisqol);
-      expect(acceptableQuality.visqolScore).toBeGreaterThanOrEqual(minimumVisqol);
+      expect(lowQuality.perceptualScore).toBeLessThan(minimumPerceptualScore);
+      expect(acceptableQuality.perceptualScore).toBeGreaterThanOrEqual(minimumPerceptualScore);
     });
 
     test('ties within 5% prefer conservative approach', () => {

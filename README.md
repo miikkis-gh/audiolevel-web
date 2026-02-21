@@ -30,7 +30,6 @@ Conservative processing wins ties. Less is more.
 ## Stack
 
 - **FFmpeg** + **SoX** - audio processing and analysis
-- **ViSQOL** - perceptual quality scoring (optional)
 - **Bun** + **Hono** - backend
 - **SvelteKit** - frontend
 - **Redis** + **BullMQ** - job queue

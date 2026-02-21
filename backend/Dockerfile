@@ -1,7 +1,7 @@
 # AudioLevel Backend
 #
 # Lightweight image with FFmpeg and SoX for audio processing.
-# ViSQOL is disabled - using spectral analysis fallback for quality scoring.
+# Perceptual quality scoring uses FFmpeg spectral analysis.
 
 FROM oven/bun:1-debian AS runtime
 
