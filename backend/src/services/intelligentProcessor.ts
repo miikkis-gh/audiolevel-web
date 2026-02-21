@@ -23,7 +23,7 @@ import {
   convertToOutputFormat,
   type CandidateProcessingResult,
 } from './candidateExecutor';
-import { evaluateCandidates, createEvaluationConfig } from './audioEvaluator';
+import { evaluateCandidates, createEvaluationConfig, type OriginalFileMetrics } from './audioEvaluator';
 import {
   extractFingerprint,
   findSimilar,
@@ -219,12 +219,29 @@ export async function runIntelligentProcessing(
       Math.abs(analysis.metrics.peakDb - analysis.metrics.rmsDb) // Input SNR estimate
     );
 
+    // Opt 6: Map Stage 1 analysis metrics to evaluator's expected shape,
+    // avoiding redundant FFmpeg calls on the original file
+    const precomputedOriginal: OriginalFileMetrics = {
+      loudness: {
+        integratedLufs: analysis.metrics.integratedLufs,
+        loudnessRange: analysis.metrics.loudnessRange,
+        truePeak: analysis.metrics.truePeak,
+      },
+      spectral: {
+        centroid: analysis.metrics.spectralCentroid,
+        flatness: analysis.metrics.spectralFlatness,
+        highEnergy: Math.min(1, analysis.metrics.spectralCentroid / 8000),
+        rmsVariance: analysis.metrics.crestFactor,
+      },
+    };
+
     const evaluation = await evaluateCandidates(
       candidates,
       results,
       inputPath,
       analysis.contentType.type,
-      evalConfig
+      evalConfig,
+      precomputedOriginal
     );
 
     processorLog.info({

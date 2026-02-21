@@ -24,6 +24,20 @@ import type { CandidateProcessingResult } from './candidateExecutor';
 
 const log = createChildLogger({ service: 'audioEvaluator' });
 
+// ── Internal type aliases ──
+
+type LoudnessMetrics = { integratedLufs: number; loudnessRange: number; truePeak: number };
+type SpectralMetrics = { centroid: number; flatness: number; highEnergy: number; rmsVariance: number };
+
+/**
+ * Precomputed metrics for the original (unprocessed) file.
+ * Can be passed in from Stage 1 analysis to avoid redundant FFmpeg calls.
+ */
+export interface OriginalFileMetrics {
+  loudness: LoudnessMetrics;
+  spectral: SpectralMetrics;
+}
+
 /**
  * Scoring weights by content type
  */
@@ -66,6 +80,7 @@ const WEIGHTS: Record<ContentType | 'unknown', ScoringWeights> = {
  * @param originalPath - Path to original input file
  * @param contentType - Detected content type
  * @param config - Evaluation configuration
+ * @param precomputedOriginal - Optional precomputed original file metrics from Stage 1 analysis
  * @returns Evaluation result with winner and scores
  */
 export async function evaluateCandidates(
@@ -73,29 +88,33 @@ export async function evaluateCandidates(
   results: CandidateProcessingResult[],
   originalPath: string,
   contentType: ContentType,
-  config: EvaluationConfig
+  config: EvaluationConfig,
+  precomputedOriginal?: OriginalFileMetrics
 ): Promise<EvaluationResult> {
-  log.info({ candidateCount: candidates.length, contentType }, 'Starting candidate evaluation');
+  log.info({ candidateCount: candidates.length, contentType, precomputed: !!precomputedOriginal }, 'Starting candidate evaluation');
 
   // Create a map of candidate configs by ID
   const candidateMap = new Map(candidates.map(c => [c.id, c]));
 
-  // Evaluate each successful candidate
-  const scores: CandidateScore[] = [];
+  // Opt 2+6: Compute original metrics once (or use precomputed from Stage 1)
+  const originalMetrics = precomputedOriginal ?? await computeOriginalMetrics(originalPath);
 
-  for (const result of results) {
-    if (!result.success || !result.outputPath) {
-      log.warn({ candidateId: result.candidateId }, 'Skipping failed candidate');
-      continue;
+  // Opt 5: Filter to valid results, then evaluate all candidates in parallel
+  const validResults = results.filter(r => {
+    if (!r.success || !r.outputPath) {
+      log.warn({ candidateId: r.candidateId }, 'Skipping failed candidate');
+      return false;
     }
+    return candidateMap.has(r.candidateId);
+  });
 
-    const candidate = candidateMap.get(result.candidateId);
-    if (!candidate) continue;
-
-    const metrics = await measureMetrics(result.outputPath, originalPath);
-    const score = scoreCandidate(candidate, metrics, contentType, config);
-    scores.push(score);
-  }
+  const scores = await Promise.all(
+    validResults.map(async (result) => {
+      const candidate = candidateMap.get(result.candidateId)!;
+      const metrics = await measureMetrics(result.outputPath!, originalMetrics);
+      return scoreCandidate(candidate, metrics, contentType, config);
+    })
+  );
 
   if (scores.length === 0) {
     throw new Error('No candidates passed evaluation');
@@ -117,39 +136,54 @@ export async function evaluateCandidates(
 }
 
 /**
+ * Compute original file metrics (loudness + spectral) in parallel
+ */
+async function computeOriginalMetrics(originalPath: string): Promise<OriginalFileMetrics> {
+  const [loudness, spectral] = await Promise.all([
+    getLoudnessMetrics(originalPath),
+    getSpectralMetrics(originalPath),
+  ]);
+  return { loudness, spectral };
+}
+
+/**
  * Measure metrics on a processed file
+ *
+ * Opt 4: Runs loudness, SNR, and spectral analysis in parallel,
+ * then applies synchronous perceptual quality scoring.
  */
 async function measureMetrics(
   processedPath: string,
-  originalPath: string
+  originalMetrics: OriginalFileMetrics
 ): Promise<CandidateMetrics> {
-  // Get loudness metrics via loudnorm
-  const loudnessMetrics = await getLoudnessMetrics(processedPath);
+  // Opt 4: Run all FFmpeg analyses in parallel (3 concurrent calls)
+  const [loudness, snrEstimate, spectral] = await Promise.all([
+    getLoudnessMetrics(processedPath),
+    estimateSnr(processedPath),
+    getSpectralMetrics(processedPath),
+  ]);
 
-  // Estimate SNR improvement
-  const snrEstimate = await estimateSnr(processedPath);
-
-  // Get ViSQOL score (or estimate if not available)
-  const qualityResult = await getVisqolScore(processedPath, originalPath);
+  // Opt 3: Pure synchronous quality scoring (no FFmpeg calls)
+  const visqolScore = computePerceptualQuality(
+    { loudness, spectral },
+    originalMetrics,
+    processedPath
+  );
 
   return {
-    integratedLufs: loudnessMetrics.integratedLufs,
-    loudnessRange: loudnessMetrics.loudnessRange,
-    truePeak: loudnessMetrics.truePeak,
-    visqolScore: qualityResult.score,
+    integratedLufs: loudness.integratedLufs,
+    loudnessRange: loudness.loudnessRange,
+    truePeak: loudness.truePeak,
+    visqolScore,
     snrEstimate,
-    qualityMethod: qualityResult.method,
+    qualityMethod: 'spectral_fallback',
   };
 }
 
 /**
  * Get loudness metrics from a file
  */
-async function getLoudnessMetrics(filePath: string): Promise<{
-  integratedLufs: number;
-  loudnessRange: number;
-  truePeak: number;
-}> {
+async function getLoudnessMetrics(filePath: string): Promise<LoudnessMetrics> {
   try {
     const { stderr } = await runCommand('ffmpeg', [
       '-i', filePath,
@@ -262,38 +296,51 @@ async function getVisqolScore(
 }
 
 /**
- * Fallback perceptual quality estimate when ViSQOL is not available
- *
- * Uses spectral analysis to compare original vs processed:
- * - Spectral difference (artifacts/distortion)
- * - Dynamic range preservation
- * - High-frequency energy preservation
- * - Phase coherence estimation
+ * Convenience async wrapper that fetches data then calls the pure scoring function.
+ * Kept for standalone use outside the optimized evaluation pipeline.
  */
 async function estimatePerceptualQuality(
   processedPath: string,
   originalPath: string
 ): Promise<number> {
-  // Run parallel analysis of both files
-  const [
-    processedMetrics,
-    originalMetrics,
-    processedSpectral,
-    originalSpectral,
-  ] = await Promise.all([
+  const [processedLoudness, originalLoudness, processedSpectral, originalSpectral] = await Promise.all([
     getLoudnessMetrics(processedPath),
     getLoudnessMetrics(originalPath),
     getSpectralMetrics(processedPath),
     getSpectralMetrics(originalPath),
   ]);
 
+  return computePerceptualQuality(
+    { loudness: processedLoudness, spectral: processedSpectral },
+    { loudness: originalLoudness, spectral: originalSpectral },
+    processedPath
+  );
+}
+
+/**
+ * Pure perceptual quality scoring function (Opt 3)
+ *
+ * Synchronous — all FFmpeg data must be pre-fetched.
+ * Compares processed vs original using spectral analysis:
+ * - Dynamic range preservation
+ * - True peak handling
+ * - Spectral centroid preservation (tonal balance)
+ * - High-frequency energy preservation
+ * - Spectral flatness change (artifact detection)
+ * - RMS level consistency (pumping detection)
+ */
+export function computePerceptualQuality(
+  processed: { loudness: LoudnessMetrics; spectral: SpectralMetrics },
+  original: { loudness: LoudnessMetrics; spectral: SpectralMetrics },
+  processedPath?: string
+): number {
   // Start with a base score of 4.0 (good quality)
   let score = 4.0;
   const penalties: string[] = [];
   const bonuses: string[] = [];
 
   // 1. Dynamic range preservation (important for music)
-  const lraDiff = originalMetrics.loudnessRange - processedMetrics.loudnessRange;
+  const lraDiff = original.loudness.loudnessRange - processed.loudness.loudnessRange;
   if (lraDiff > 8) {
     // Severe compression
     score -= 0.6;
@@ -309,18 +356,18 @@ async function estimatePerceptualQuality(
   }
 
   // 2. True peak handling
-  if (processedMetrics.truePeak > -0.3) {
+  if (processed.loudness.truePeak > -0.3) {
     // Potential inter-sample clipping
     score -= 0.5;
     penalties.push('potential_clipping');
-  } else if (processedMetrics.truePeak > -0.8) {
+  } else if (processed.loudness.truePeak > -0.8) {
     // Borderline safe
     score -= 0.2;
     penalties.push('marginal_headroom');
   }
 
   // 3. Spectral centroid preservation (tonal balance)
-  const centroidDiff = Math.abs(processedSpectral.centroid - originalSpectral.centroid) / originalSpectral.centroid;
+  const centroidDiff = Math.abs(processed.spectral.centroid - original.spectral.centroid) / original.spectral.centroid;
   if (centroidDiff > 0.3) {
     // Significant tonal shift
     score -= 0.4;
@@ -332,8 +379,8 @@ async function estimatePerceptualQuality(
   }
 
   // 4. High frequency energy preservation (detail/air)
-  const hfRatio = originalSpectral.highEnergy > 0 ?
-    processedSpectral.highEnergy / originalSpectral.highEnergy : 1;
+  const hfRatio = original.spectral.highEnergy > 0 ?
+    processed.spectral.highEnergy / original.spectral.highEnergy : 1;
   if (hfRatio < 0.5) {
     // Lost high frequencies (dull sound)
     score -= 0.35;
@@ -345,7 +392,7 @@ async function estimatePerceptualQuality(
   }
 
   // 5. Spectral flatness change (artifacts/distortion indicator)
-  const flatnessDiff = Math.abs(processedSpectral.flatness - originalSpectral.flatness);
+  const flatnessDiff = Math.abs(processed.spectral.flatness - original.spectral.flatness);
   if (flatnessDiff > 0.2) {
     // Significant spectral change (possible artifacts)
     score -= 0.3;
@@ -353,7 +400,7 @@ async function estimatePerceptualQuality(
   }
 
   // 6. RMS level consistency (no pumping)
-  const rmsVariance = Math.abs(processedSpectral.rmsVariance - originalSpectral.rmsVariance);
+  const rmsVariance = Math.abs(processed.spectral.rmsVariance - original.spectral.rmsVariance);
   if (rmsVariance > 5) {
     // Introduced pumping/breathing
     score -= 0.25;
@@ -364,7 +411,7 @@ async function estimatePerceptualQuality(
   score = Math.max(1, Math.min(5, score));
 
   log.info({
-    processedPath: processedPath.split('/').pop(), // Just filename
+    processedPath: processedPath?.split('/').pop(),
     estimatedMos: score.toFixed(2),
     penalties,
     bonuses,
@@ -375,41 +422,30 @@ async function estimatePerceptualQuality(
 
 /**
  * Get spectral metrics for quality estimation
+ *
+ * Opt 1: Uses a single FFmpeg command with chained aspectralstats + astats filters
+ * instead of two separate calls. Both filters write to stderr with distinct prefixes.
  */
-async function getSpectralMetrics(filePath: string): Promise<{
-  centroid: number;
-  flatness: number;
-  highEnergy: number;
-  rmsVariance: number;
-}> {
+async function getSpectralMetrics(filePath: string): Promise<SpectralMetrics> {
   try {
-    // Use aspectralstats for spectral analysis
-    const { stderr: spectralOut } = await runCommand('ffmpeg', [
+    // Opt 1: Single FFmpeg pass with both filters chained
+    const { stderr } = await runCommand('ffmpeg', [
       '-i', filePath,
-      '-af', 'aspectralstats=measure=mean',
+      '-af', 'aspectralstats=measure=mean,astats=metadata=1:measure_overall=1',
       '-f', 'null',
       '-',
     ], { timeoutMs: env.PROCESSING_TIMEOUT_MS });
 
-    // Use astats for RMS analysis
-    const { stderr: statsOut } = await runCommand('ffmpeg', [
-      '-i', filePath,
-      '-af', 'astats=metadata=1:measure_overall=1',
-      '-f', 'null',
-      '-',
-    ], { timeoutMs: env.PROCESSING_TIMEOUT_MS });
-
-    const centroidMatch = spectralOut.match(/spectral_centroid:\s*([\d.]+)/);
-    const flatnessMatch = spectralOut.match(/spectral_flatness:\s*([\d.]+)/);
+    const centroidMatch = stderr.match(/spectral_centroid:\s*([\d.]+)/);
+    const flatnessMatch = stderr.match(/spectral_flatness:\s*([\d.]+)/);
+    const rmsMatch = stderr.match(/RMS level dB:\s*(-?[\d.]+)/);
+    const peakMatch = stderr.match(/Peak level dB:\s*(-?[\d.]+)/);
 
     // Estimate high frequency energy from spectral centroid
     const centroid = centroidMatch ? parseFloat(centroidMatch[1]) : 2000;
     const flatness = flatnessMatch ? parseFloat(flatnessMatch[1]) : 0.5;
 
     // Extract RMS variance from astats
-    const rmsMatch = statsOut.match(/RMS level dB:\s*(-?[\d.]+)/);
-    const peakMatch = statsOut.match(/Peak level dB:\s*(-?[\d.]+)/);
-
     const rms = rmsMatch ? parseFloat(rmsMatch[1]) : -20;
     const peak = peakMatch ? parseFloat(peakMatch[1]) : -1;
     const rmsVariance = Math.abs(peak - rms);
