@@ -51,8 +51,6 @@ export interface EstimatorStats {
  * Configuration for the estimator
  */
 export interface EstimatorConfig {
-  historyPath: string;
-  statsPath: string;
   highThreshold: number;
   moderateThreshold: number;
   maxHistory: number;

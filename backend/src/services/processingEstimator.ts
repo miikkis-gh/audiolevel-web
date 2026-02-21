@@ -1,19 +1,19 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
 import type { AnalysisMetrics } from '../types/analysis';
 import type { AudioFingerprint, ProcessingOutcome, SimilarMatch, EstimatorConfig, EstimatorStats } from '../types/estimator';
 import { env } from '../config/env';
 import { createChildLogger } from '../utils/logger';
+import { getRedisClient } from './redis';
 
 const log = createChildLogger({ service: 'processingEstimator' });
+
+const REDIS_HISTORY_KEY = 'estimator:history';
+const REDIS_STATS_KEY = 'estimator:stats';
 
 /**
  * Get estimator config from environment
  */
 export function getEstimatorConfig(): EstimatorConfig {
   return {
-    historyPath: env.ESTIMATOR_HISTORY_PATH,
-    statsPath: env.ESTIMATOR_STATS_PATH,
     highThreshold: env.ESTIMATOR_HIGH_THRESHOLD,
     moderateThreshold: env.ESTIMATOR_MODERATE_THRESHOLD,
     maxHistory: env.ESTIMATOR_MAX_HISTORY,
@@ -97,17 +97,15 @@ export function extractFingerprint(metrics: AnalysisMetrics): AudioFingerprint {
 }
 
 /**
- * Load processing history from JSON file
+ * Load processing history from Redis
  */
-export function loadHistory(historyPath: string): ProcessingOutcome[] {
-  if (!existsSync(historyPath)) {
-    return [];
-  }
-
+export async function loadHistory(): Promise<ProcessingOutcome[]> {
   try {
-    const content = readFileSync(historyPath, 'utf-8');
-    return JSON.parse(content) as ProcessingOutcome[];
-  } catch {
+    const redis = getRedisClient();
+    const entries = await redis.lrange(REDIS_HISTORY_KEY, 0, -1);
+    return entries.map((entry) => JSON.parse(entry) as ProcessingOutcome);
+  } catch (err) {
+    log.error({ err }, 'Failed to load history from Redis');
     return [];
   }
 }
@@ -115,43 +113,37 @@ export function loadHistory(historyPath: string): ProcessingOutcome[] {
 /**
  * Save a processing outcome to history
  */
-export function saveOutcome(outcome: ProcessingOutcome, historyPath: string, maxHistory = 10000): void {
-  // Ensure directory exists
-  const dir = dirname(historyPath);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+export async function saveOutcome(outcome: ProcessingOutcome, maxHistory = 10000): Promise<void> {
+  try {
+    const redis = getRedisClient();
+    await redis.rpush(REDIS_HISTORY_KEY, JSON.stringify(outcome));
+    // Trim to keep only the latest maxHistory entries
+    await redis.ltrim(REDIS_HISTORY_KEY, -maxHistory, -1);
+  } catch (err) {
+    log.error({ err }, 'Failed to save outcome to Redis');
   }
-
-  const history = loadHistory(historyPath);
-  history.push(outcome);
-
-  // Prune oldest entries if over limit
-  const pruned = history.length > maxHistory
-    ? history.slice(history.length - maxHistory)
-    : history;
-
-  writeFileSync(historyPath, JSON.stringify(pruned, null, 2));
 }
 
 /**
- * Clear all history (for testing)
+ * Clear all history
  */
-export function clearHistory(historyPath: string): void {
-  const dir = dirname(historyPath);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+export async function clearHistory(): Promise<void> {
+  try {
+    const redis = getRedisClient();
+    await redis.del(REDIS_HISTORY_KEY);
+  } catch (err) {
+    log.error({ err }, 'Failed to clear history from Redis');
   }
-  writeFileSync(historyPath, '[]');
 }
 
 /**
  * Find similar historical processing outcomes
  */
-export function findSimilar(
+export async function findSimilar(
   fingerprint: AudioFingerprint,
   config: EstimatorConfig
-): SimilarMatch | null {
-  const history = loadHistory(config.historyPath);
+): Promise<SimilarMatch | null> {
+  const history = await loadHistory();
 
   if (history.length === 0) {
     return null;
@@ -191,68 +183,59 @@ export function findSimilar(
   };
 }
 
-/**
- * Load estimator stats from file
- */
-export function loadStats(statsPath: string): EstimatorStats {
-  if (!existsSync(statsPath)) {
-    return {
-      totalPredictions: 0,
-      highConfidenceHits: 0,
-      highConfidenceMisses: 0,
-      moderateConfidenceHits: 0,
-      moderateConfidenceMisses: 0,
-      lastUpdated: 0,
-    };
-  }
+const DEFAULT_STATS: EstimatorStats = {
+  totalPredictions: 0,
+  highConfidenceHits: 0,
+  highConfidenceMisses: 0,
+  moderateConfidenceHits: 0,
+  moderateConfidenceMisses: 0,
+  lastUpdated: 0,
+};
 
+/**
+ * Load estimator stats from Redis
+ */
+export async function loadStats(): Promise<EstimatorStats> {
   try {
-    const content = readFileSync(statsPath, 'utf-8');
-    return JSON.parse(content) as EstimatorStats;
-  } catch {
+    const redis = getRedisClient();
+    const data = await redis.hgetall(REDIS_STATS_KEY);
+    if (!data || Object.keys(data).length === 0) {
+      return { ...DEFAULT_STATS };
+    }
     return {
-      totalPredictions: 0,
-      highConfidenceHits: 0,
-      highConfidenceMisses: 0,
-      moderateConfidenceHits: 0,
-      moderateConfidenceMisses: 0,
-      lastUpdated: 0,
+      totalPredictions: parseInt(data.totalPredictions || '0', 10),
+      highConfidenceHits: parseInt(data.highConfidenceHits || '0', 10),
+      highConfidenceMisses: parseInt(data.highConfidenceMisses || '0', 10),
+      moderateConfidenceHits: parseInt(data.moderateConfidenceHits || '0', 10),
+      moderateConfidenceMisses: parseInt(data.moderateConfidenceMisses || '0', 10),
+      lastUpdated: parseInt(data.lastUpdated || '0', 10),
     };
+  } catch (err) {
+    log.error({ err }, 'Failed to load stats from Redis');
+    return { ...DEFAULT_STATS };
   }
 }
 
 /**
  * Record a prediction result for stats tracking
  */
-export function recordPredictionResult(
+export async function recordPredictionResult(
   confidence: 'high' | 'moderate',
   correct: boolean,
-  statsPath: string
-): void {
-  const dir = dirname(statsPath);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+): Promise<void> {
+  try {
+    const redis = getRedisClient();
+    const field = confidence === 'high'
+      ? (correct ? 'highConfidenceHits' : 'highConfidenceMisses')
+      : (correct ? 'moderateConfidenceHits' : 'moderateConfidenceMisses');
+
+    await redis
+      .multi()
+      .hincrby(REDIS_STATS_KEY, 'totalPredictions', 1)
+      .hincrby(REDIS_STATS_KEY, field, 1)
+      .hset(REDIS_STATS_KEY, 'lastUpdated', Date.now().toString())
+      .exec();
+  } catch (err) {
+    log.error({ err }, 'Failed to record prediction result in Redis');
   }
-
-  const stats = loadStats(statsPath);
-
-  stats.totalPredictions++;
-
-  if (confidence === 'high') {
-    if (correct) {
-      stats.highConfidenceHits++;
-    } else {
-      stats.highConfidenceMisses++;
-    }
-  } else {
-    if (correct) {
-      stats.moderateConfidenceHits++;
-    } else {
-      stats.moderateConfidenceMisses++;
-    }
-  }
-
-  stats.lastUpdated = Date.now();
-
-  writeFileSync(statsPath, JSON.stringify(stats, null, 2));
 }

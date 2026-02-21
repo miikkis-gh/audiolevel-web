@@ -1,15 +1,10 @@
-import { describe, expect, test, beforeEach, afterAll } from 'bun:test';
+import { describe, expect, test, beforeEach } from 'bun:test';
 import { extractFingerprint, computeDistance, loadHistory, saveOutcome, clearHistory, findSimilar, loadStats, recordPredictionResult } from '../services/processingEstimator';
 import type { AudioFingerprint, ProcessingOutcome, EstimatorConfig } from '../types/estimator';
 import type { AnalysisMetrics } from '../types/analysis';
-import { rmSync, existsSync } from 'fs';
-
-const TEST_HISTORY_PATH = 'data/test-processing-history.json';
-const TEST_STATS_PATH = 'data/test-estimator-stats.json';
+import { getRedisClient } from '../services/redis';
 
 const TEST_CONFIG: EstimatorConfig = {
-  historyPath: TEST_HISTORY_PATH,
-  statsPath: 'data/test-estimator-stats.json',
   highThreshold: 0.05,
   moderateThreshold: 0.15,
   maxHistory: 10000,
@@ -150,25 +145,17 @@ describe('Processing Estimator', () => {
     });
   });
 
-  describe('History Storage', () => {
-    beforeEach(() => {
-      if (existsSync(TEST_HISTORY_PATH)) {
-        rmSync(TEST_HISTORY_PATH);
-      }
+  describe('History Storage (Redis)', () => {
+    beforeEach(async () => {
+      await clearHistory();
     });
 
-    afterAll(() => {
-      if (existsSync(TEST_HISTORY_PATH)) {
-        rmSync(TEST_HISTORY_PATH);
-      }
-    });
-
-    test('loadHistory returns empty array when file does not exist', () => {
-      const history = loadHistory(TEST_HISTORY_PATH);
+    test('loadHistory returns empty array when no data exists', async () => {
+      const history = await loadHistory();
       expect(history).toEqual([]);
     });
 
-    test('saveOutcome creates file and stores outcome', () => {
+    test('saveOutcome stores outcome', async () => {
       const outcome: ProcessingOutcome = {
         fingerprint: {
           integratedLufs: -16,
@@ -183,14 +170,14 @@ describe('Processing Estimator', () => {
         timestamp: Date.now(),
       };
 
-      saveOutcome(outcome, TEST_HISTORY_PATH);
+      await saveOutcome(outcome);
 
-      const history = loadHistory(TEST_HISTORY_PATH);
+      const history = await loadHistory();
       expect(history).toHaveLength(1);
       expect(history[0].winnerCandidateId).toBe('conservative-speech');
     });
 
-    test('saveOutcome appends to existing history', () => {
+    test('saveOutcome appends to existing history', async () => {
       const outcome1: ProcessingOutcome = {
         fingerprint: {
           integratedLufs: -16,
@@ -218,14 +205,14 @@ describe('Processing Estimator', () => {
         timestamp: Date.now(),
       };
 
-      saveOutcome(outcome1, TEST_HISTORY_PATH);
-      saveOutcome(outcome2, TEST_HISTORY_PATH);
+      await saveOutcome(outcome1);
+      await saveOutcome(outcome2);
 
-      const history = loadHistory(TEST_HISTORY_PATH);
+      const history = await loadHistory();
       expect(history).toHaveLength(2);
     });
 
-    test('clearHistory removes all entries', () => {
+    test('clearHistory removes all entries', async () => {
       const outcome: ProcessingOutcome = {
         fingerprint: {
           integratedLufs: -16,
@@ -240,20 +227,20 @@ describe('Processing Estimator', () => {
         timestamp: Date.now(),
       };
 
-      saveOutcome(outcome, TEST_HISTORY_PATH);
-      clearHistory(TEST_HISTORY_PATH);
+      await saveOutcome(outcome);
+      await clearHistory();
 
-      const history = loadHistory(TEST_HISTORY_PATH);
+      const history = await loadHistory();
       expect(history).toEqual([]);
     });
   });
 
   describe('findSimilar', () => {
-    beforeEach(() => {
-      clearHistory(TEST_HISTORY_PATH);
+    beforeEach(async () => {
+      await clearHistory();
     });
 
-    test('returns null when history is empty', () => {
+    test('returns null when history is empty', async () => {
       const fingerprint: AudioFingerprint = {
         integratedLufs: -16,
         loudnessRange: 10,
@@ -262,11 +249,11 @@ describe('Processing Estimator', () => {
         spectralFlatness: 0.4,
       };
 
-      const match = findSimilar(fingerprint, TEST_CONFIG);
+      const match = await findSimilar(fingerprint, TEST_CONFIG);
       expect(match).toBeNull();
     });
 
-    test('returns high confidence for very similar fingerprint', () => {
+    test('returns high confidence for very similar fingerprint', async () => {
       const outcome: ProcessingOutcome = {
         fingerprint: {
           integratedLufs: -16,
@@ -280,7 +267,7 @@ describe('Processing Estimator', () => {
         contentType: 'speech',
         timestamp: Date.now(),
       };
-      saveOutcome(outcome, TEST_HISTORY_PATH);
+      await saveOutcome(outcome);
 
       const query: AudioFingerprint = {
         integratedLufs: -16.1,
@@ -290,13 +277,13 @@ describe('Processing Estimator', () => {
         spectralFlatness: 0.41,
       };
 
-      const match = findSimilar(query, TEST_CONFIG);
+      const match = await findSimilar(query, TEST_CONFIG);
       expect(match).not.toBeNull();
       expect(match!.confidence).toBe('high');
       expect(match!.predictedWinner).toBe('conservative-speech');
     });
 
-    test('returns moderate confidence for somewhat similar fingerprint', () => {
+    test('returns moderate confidence for somewhat similar fingerprint', async () => {
       const outcome: ProcessingOutcome = {
         fingerprint: {
           integratedLufs: -16,
@@ -310,7 +297,7 @@ describe('Processing Estimator', () => {
         contentType: 'speech',
         timestamp: Date.now(),
       };
-      saveOutcome(outcome, TEST_HISTORY_PATH);
+      await saveOutcome(outcome);
 
       // Fingerprint with distance ~0.08 (between high=0.05 and moderate=0.15)
       const query: AudioFingerprint = {
@@ -321,12 +308,12 @@ describe('Processing Estimator', () => {
         spectralFlatness: 0.5,
       };
 
-      const match = findSimilar(query, TEST_CONFIG);
+      const match = await findSimilar(query, TEST_CONFIG);
       expect(match).not.toBeNull();
       expect(match!.confidence).toBe('moderate');
     });
 
-    test('returns null for dissimilar fingerprint', () => {
+    test('returns null for dissimilar fingerprint', async () => {
       const outcome: ProcessingOutcome = {
         fingerprint: {
           integratedLufs: -16,
@@ -340,7 +327,7 @@ describe('Processing Estimator', () => {
         contentType: 'speech',
         timestamp: Date.now(),
       };
-      saveOutcome(outcome, TEST_HISTORY_PATH);
+      await saveOutcome(outcome);
 
       const query: AudioFingerprint = {
         integratedLufs: -8,
@@ -350,11 +337,11 @@ describe('Processing Estimator', () => {
         spectralFlatness: 0.1,
       };
 
-      const match = findSimilar(query, TEST_CONFIG);
+      const match = await findSimilar(query, TEST_CONFIG);
       expect(match).toBeNull();
     });
 
-    test('matchCount reflects number of agreeing history entries', () => {
+    test('matchCount reflects number of agreeing history entries', async () => {
       for (let i = 0; i < 3; i++) {
         const outcome: ProcessingOutcome = {
           fingerprint: {
@@ -369,7 +356,7 @@ describe('Processing Estimator', () => {
           contentType: 'speech',
           timestamp: Date.now(),
         };
-        saveOutcome(outcome, TEST_HISTORY_PATH);
+        await saveOutcome(outcome);
       }
 
       const query: AudioFingerprint = {
@@ -380,57 +367,50 @@ describe('Processing Estimator', () => {
         spectralFlatness: 0.4,
       };
 
-      const match = findSimilar(query, TEST_CONFIG);
+      const match = await findSimilar(query, TEST_CONFIG);
       expect(match).not.toBeNull();
       expect(match!.matchCount).toBeGreaterThanOrEqual(1);
     });
   });
 
-  describe('Stats Tracking', () => {
-    beforeEach(() => {
-      if (existsSync(TEST_STATS_PATH)) {
-        rmSync(TEST_STATS_PATH);
-      }
+  describe('Stats Tracking (Redis)', () => {
+    beforeEach(async () => {
+      const redis = getRedisClient();
+      await redis.del('estimator:stats');
     });
 
-    afterAll(() => {
-      if (existsSync(TEST_STATS_PATH)) {
-        rmSync(TEST_STATS_PATH);
-      }
-    });
-
-    test('loadStats returns zeros when file does not exist', () => {
-      const stats = loadStats(TEST_STATS_PATH);
+    test('loadStats returns zeros when no data exists', async () => {
+      const stats = await loadStats();
       expect(stats.totalPredictions).toBe(0);
       expect(stats.highConfidenceHits).toBe(0);
       expect(stats.highConfidenceMisses).toBe(0);
     });
 
-    test('recordPredictionResult increments high confidence hit', () => {
-      recordPredictionResult('high', true, TEST_STATS_PATH);
+    test('recordPredictionResult increments high confidence hit', async () => {
+      await recordPredictionResult('high', true);
 
-      const stats = loadStats(TEST_STATS_PATH);
+      const stats = await loadStats();
       expect(stats.totalPredictions).toBe(1);
       expect(stats.highConfidenceHits).toBe(1);
       expect(stats.highConfidenceMisses).toBe(0);
     });
 
-    test('recordPredictionResult increments moderate confidence miss', () => {
-      recordPredictionResult('moderate', false, TEST_STATS_PATH);
+    test('recordPredictionResult increments moderate confidence miss', async () => {
+      await recordPredictionResult('moderate', false);
 
-      const stats = loadStats(TEST_STATS_PATH);
+      const stats = await loadStats();
       expect(stats.totalPredictions).toBe(1);
       expect(stats.moderateConfidenceHits).toBe(0);
       expect(stats.moderateConfidenceMisses).toBe(1);
     });
 
-    test('stats accumulate across multiple calls', () => {
-      recordPredictionResult('high', true, TEST_STATS_PATH);
-      recordPredictionResult('high', true, TEST_STATS_PATH);
-      recordPredictionResult('high', false, TEST_STATS_PATH);
-      recordPredictionResult('moderate', true, TEST_STATS_PATH);
+    test('stats accumulate across multiple calls', async () => {
+      await recordPredictionResult('high', true);
+      await recordPredictionResult('high', true);
+      await recordPredictionResult('high', false);
+      await recordPredictionResult('moderate', true);
 
-      const stats = loadStats(TEST_STATS_PATH);
+      const stats = await loadStats();
       expect(stats.totalPredictions).toBe(4);
       expect(stats.highConfidenceHits).toBe(2);
       expect(stats.highConfidenceMisses).toBe(1);

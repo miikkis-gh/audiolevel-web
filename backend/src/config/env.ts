@@ -13,8 +13,6 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default(''), // Comma-separated list of allowed origins
   // Processing estimator configuration
   ESTIMATOR_ENABLED: z.coerce.boolean().default(true),
-  ESTIMATOR_HISTORY_PATH: z.string().default('data/processing-history.json'),
-  ESTIMATOR_STATS_PATH: z.string().default('data/estimator-stats.json'),
   ESTIMATOR_HIGH_THRESHOLD: z.coerce.number().default(0.05),
   ESTIMATOR_MODERATE_THRESHOLD: z.coerce.number().default(0.15),
   ESTIMATOR_MAX_HISTORY: z.coerce.number().default(10000),

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
-  import JSZip from 'jszip';
   import ParticleSphere from './ParticleSphere.svelte';
   import SingleReport from './SingleReport.svelte';
   import BatchReport from './BatchReport.svelte';
@@ -11,7 +10,6 @@
   import {
     SINGLE_REPORT,
     MAX_BATCH,
-    BATCH_MOCK_POOL,
     PROFILE_COLORS,
     type Mode,
     type ParticleState,
@@ -21,7 +19,10 @@
     type OverrideType,
   } from './constants';
   import { getStageLabel, getLayout, getPositions, truncName } from './helpers';
-  import { uploadFile, getDownloadUrl, getJobStatus, fetchRateLimitStatus, submitRating, type ApiError, type JobResult, type RateLimitStatus, type RatingPayload, type GenreGuess } from '../../../stores/api';
+  import { buildReportFromResult, buildBatchReportFromResult, buildReportFromBatchReport } from './reportBuilder';
+  import { triggerDownload, downloadBatchFilesStaggered, downloadBatchAsZip } from './downloadService';
+  import { submitFileRating } from './ratingService';
+  import { uploadFile, getDownloadUrl, getJobStatus, fetchRateLimitStatus, type ApiError, type JobResult, type RateLimitStatus, type GenreGuess } from '../../../stores/api';
   import {
     connectWebSocket,
     disconnectWebSocket,
@@ -29,7 +30,6 @@
     clearJobData,
     jobProgress,
     jobResults,
-    getWsUrl,
   } from '../../../stores/websocket';
 
   // State
@@ -82,30 +82,6 @@
   let rateLimitInterval: ReturnType<typeof setInterval> | null = null;
   let nowInterval: ReturnType<typeof setInterval> | null = null;
 
-  // Fallback processing display info (when no profile detection available)
-  const PROCESSING_FALLBACK = {
-    mastering: {
-      displayName: 'Music / Song',
-      standard: 'Streaming (Spotify / Apple Music / YouTube)',
-      target: '-14 LUFS / -1 dBTP',
-    },
-    normalization: {
-      displayName: 'Normalized Audio',
-      standard: 'Broadcast Standard',
-      target: '-16 LUFS / -1 dBTP',
-    },
-    'peak-normalization': {
-      displayName: 'SFX / Sample',
-      standard: 'SFX / Sample library',
-      target: 'Peak normalize to -1 dBFS',
-    },
-    intelligent: {
-      displayName: 'Audio',
-      standard: 'Intelligent Processing',
-      target: 'Adaptive',
-    },
-  };
-
   // Error helper functions
   let errorTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -120,138 +96,6 @@
   function clearError() {
     errorState = null;
     if (errorTimer) clearTimeout(errorTimer);
-  }
-
-  // Format number for display
-  function formatLufs(value: number | undefined): string {
-    if (value === undefined) return 'N/A';
-    return `${value.toFixed(1)} LUFS`;
-  }
-
-  function formatTruePeak(value: number | undefined): string {
-    if (value === undefined) return 'N/A';
-    return `${value.toFixed(1)} dBTP`;
-  }
-
-  function formatLra(value: number | undefined): string {
-    if (value === undefined) return 'N/A';
-    return `${value.toFixed(1)} LU`;
-  }
-
-  // Build report from job result
-  function buildReportFromResult(result: JobResult): SingleReportData {
-    const profile = result.detectedProfile;
-    const processingType = result.processingType || 'mastering';
-    const report = result.processingReport;
-    const fallback = PROCESSING_FALLBACK[processingType] || PROCESSING_FALLBACK.mastering;
-
-    // Use detected profile data if available, otherwise use fallback
-    const displayName = profile?.label || fallback.displayName;
-    const standard = profile?.standard || fallback.standard;
-    const target = profile
-      ? `${profile.targetLufs} LUFS / ${profile.targetTruePeak} dBTP`
-      : fallback.target;
-    const confidence = profile?.confidence || 'HIGH';
-
-    const notes: string[] = [];
-
-    // Build notes based on processing
-    if (processingType === 'mastering') {
-      if (result.masteringDecisions?.compressionEnabled) {
-        notes.push('Compression applied — dynamic range was high');
-      }
-      if (result.masteringDecisions?.saturationEnabled) {
-        notes.push('Saturation applied — added harmonic warmth');
-      }
-    }
-
-    if (result.inputAnalysis && result.outputAnalysis) {
-      const inputPeak = result.inputAnalysis.inputTruePeak;
-      if (inputPeak !== undefined && inputPeak > -1) {
-        notes.push(`True peak exceeded -1 dBTP (was ${inputPeak.toFixed(1)} dBTP) — limiter applied`);
-      }
-      const gainChange = (result.outputAnalysis.inputLufs || 0) - (result.inputAnalysis.inputLufs || 0);
-      if (Math.abs(gainChange) > 3) {
-        notes.push(`Gain ${gainChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(gainChange).toFixed(1)} dB`);
-      }
-    }
-
-    if (notes.length === 0) {
-      notes.push('Processing completed successfully');
-    }
-
-    // Build reasons from profile detection or use processing info
-    const reasons = profile?.reasons.map(r => ({
-      signal: r.signal,
-      detail: r.detail,
-    })) || [
-      { signal: `Processing: ${processingType}`, detail: 'processing method used' },
-      { signal: `Duration: ${result.duration ? `${(result.duration / 1000).toFixed(1)}s` : 'N/A'}`, detail: 'processing time' },
-    ];
-
-    // Build intelligent processing report if available
-    const intelligentProcessing = report ? {
-      problemsDetected: report.problemsDetected.map(p => ({
-        problem: p.problem,
-        details: p.details,
-        severity: (p.severity as 'mild' | 'moderate' | 'severe') || undefined,
-      })),
-      processingApplied: report.processingApplied,
-      candidatesTested: report.candidatesTested,
-      winnerReason: report.winnerReason,
-      qualityMethod: report.qualityMethod,
-    } : undefined;
-
-    return {
-      detectedAs: displayName,
-      confidence,
-      reasons,
-      before: {
-        integrated: formatLufs(result.inputAnalysis?.inputLufs),
-        truePeak: formatTruePeak(result.inputAnalysis?.inputTruePeak),
-        lra: formatLra(result.inputAnalysis?.inputLoudnessRange),
-      },
-      after: {
-        integrated: formatLufs(result.outputAnalysis?.inputLufs),
-        truePeak: formatTruePeak(result.outputAnalysis?.inputTruePeak),
-        lra: formatLra(result.outputAnalysis?.inputLoudnessRange),
-      },
-      target,
-      standard,
-      notes,
-      intelligentProcessing,
-    };
-  }
-
-  // Build batch report from job result
-  function buildBatchReportFromResult(result: JobResult): BatchReportData {
-    const single = buildReportFromResult(result);
-    return {
-      type: single.detectedAs,
-      conf: single.confidence,
-      reasons: single.reasons,
-      before: single.before,
-      after: single.after,
-      target: single.target,
-      standard: single.standard,
-      notes: single.notes,
-      intelligentProcessing: single.intelligentProcessing,
-    };
-  }
-
-  // Convert batch report back to single report for rating
-  function buildReportFromBatchReport(batch: BatchReportData): SingleReportData {
-    return {
-      detectedAs: batch.type,
-      confidence: batch.conf,
-      reasons: batch.reasons,
-      before: batch.before,
-      after: batch.after,
-      target: batch.target,
-      standard: batch.standard,
-      notes: batch.notes,
-      intelligentProcessing: batch.intelligentProcessing,
-    };
   }
 
   // Fetch full job details and update report
@@ -490,7 +334,7 @@
       name: file.name,
       progress: 0,
       fileState: 'pending',
-      report: BATCH_MOCK_POOL[i % BATCH_MOCK_POOL.length], // Will be replaced with real data
+      report: undefined,
     }));
     batchFiles = batchData;
     mergeTriggered = false;
@@ -646,7 +490,7 @@
     overrideTimer = setTimeout(() => {
       if (mode === 'batch-complete') {
         batchFiles = batchFiles.map((f, i) => {
-          if (i !== reportIndex) return f;
+          if (i !== reportIndex || !f.report) return f;
           return {
             ...f,
             report: {
@@ -712,26 +556,25 @@
         const url = file.downloadUrl || getDownloadUrl(file.jobId);
         triggerDownload(url, file.name);
         // Show rating toast for single file from batch
-        const reportData = buildReportFromBatchReport(file.report);
-        showRatingToastAfterDownload(file.jobId, file.name, reportData);
+        if (file.report) {
+          const reportData = buildReportFromBatchReport(file.report);
+          showRatingToastAfterDownload(file.jobId, file.name, reportData);
+        }
       }
     } else {
       // Download all - stagger to avoid popup blocker
       const completedFiles = batchFiles.filter((f) => f.jobId && f.fileState === 'complete');
-      pendingBatchDownloads = completedFiles.length;
-      completedFiles.forEach((file, i) => {
-        setTimeout(() => {
-          const url = file.downloadUrl || getDownloadUrl(file.jobId!);
-          triggerDownload(url, file.name);
-          pendingBatchDownloads--;
-          // Show rating toast after last download completes
-          if (pendingBatchDownloads === 0 && completedFiles.length > 0) {
+      downloadBatchFilesStaggered(
+        batchFiles,
+        (remaining) => { pendingBatchDownloads = remaining; },
+        () => {
+          if (completedFiles.length > 0) {
             const firstFile = completedFiles[0];
-            const reportData = buildReportFromBatchReport(firstFile.report);
+            const reportData = firstFile.report ? buildReportFromBatchReport(firstFile.report) : singleReport;
             showRatingToastAfterDownload(firstFile.jobId!, `${completedFiles.length} files`, reportData);
           }
-        }, i * 300); // 300ms delay between each download
-      });
+        },
+      );
     }
   }
 
@@ -740,31 +583,13 @@
     zipping = true;
 
     try {
-      const zip = new JSZip();
-      const completedFiles = batchFiles.filter((f) => f.jobId && f.fileState === 'complete');
-
-      // Fetch all files and add to zip
-      await Promise.all(
-        completedFiles.map(async (file) => {
-          const url = file.downloadUrl || getDownloadUrl(file.jobId!);
-          const response = await fetch(url);
-          if (response.ok) {
-            const blob = await response.blob();
-            zip.file(file.name, blob);
-          }
-        })
-      );
-
-      // Generate and download ZIP
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const zipUrl = URL.createObjectURL(zipBlob);
-      triggerDownload(zipUrl, 'audiolevel-processed.zip');
-      URL.revokeObjectURL(zipUrl);
+      await downloadBatchAsZip(batchFiles);
 
       // Show rating toast after ZIP download using first file's report
+      const completedFiles = batchFiles.filter((f) => f.jobId && f.fileState === 'complete');
       if (completedFiles.length > 0) {
         const firstFile = completedFiles[0];
-        const reportData = buildReportFromBatchReport(firstFile.report);
+        const reportData = firstFile.report ? buildReportFromBatchReport(firstFile.report) : singleReport;
         showRatingToastAfterDownload(firstFile.jobId!, `${completedFiles.length} files (ZIP)`, reportData);
       }
     } catch (err) {
@@ -773,17 +598,6 @@
     } finally {
       zipping = false;
     }
-  }
-
-  // Use anchor element to trigger download (bypasses popup blocker)
-  function triggerDownload(url: string, filename: string) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename || 'download';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
   }
 
   // Show rating toast after download
@@ -797,34 +611,7 @@
   // Handle rating submission
   function handleRating(rating: 'up' | 'down') {
     if (ratingJobId && ratingReport) {
-      const payload: RatingPayload = {
-        jobId: ratingJobId,
-        rating,
-        fileName: ratingFileName,
-        report: {
-          contentType: ratingReport.detectedAs,
-          contentConfidence: ratingReport.confidence,
-          qualityMethod: ratingReport.intelligentProcessing?.qualityMethod,
-          inputMetrics: {
-            lufs: ratingReport.before.integrated,
-            truePeak: ratingReport.before.truePeak,
-            lra: ratingReport.before.lra,
-          },
-          outputMetrics: {
-            lufs: ratingReport.after.integrated,
-            truePeak: ratingReport.after.truePeak,
-            lra: ratingReport.after.lra,
-          },
-          problemsDetected: ratingReport.intelligentProcessing?.problemsDetected.map(p => ({
-            problem: p.problem,
-            details: p.details,
-            severity: p.severity,
-          })),
-          processingApplied: ratingReport.intelligentProcessing?.processingApplied,
-          candidatesTested: ratingReport.intelligentProcessing?.candidatesTested,
-        },
-      };
-      submitRating(payload);
+      submitFileRating(ratingJobId, rating, ratingFileName, ratingReport);
     }
     dismissRatingToast();
   }
@@ -976,7 +763,7 @@
             size={layout.size}
             progress={file.progress}
             pState={file.progress >= 100 ? 'complete' : file.progress > 0 ? 'processing' : 'idle'}
-            profileColor={PROFILE_COLORS[file.report.type] || null}
+            profileColor={file.report ? PROFILE_COLORS[file.report.type] || null : null}
             mini
           />
           <div class="mini-label" style="max-width: {layout.size + 24}px">
@@ -1221,12 +1008,10 @@
   />
 
   <!-- Activity panel -->
-  <ActivityPanel wsUrl={getWsUrl()} />
+  <ActivityPanel />
 </div>
 
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&family=IBM+Plex+Mono:wght@300;400;500&display=swap');
-
   .audiolevel-root {
     min-height: 100vh;
     background: #06070b;

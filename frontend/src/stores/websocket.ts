@@ -4,6 +4,8 @@ import { writable, derived, get } from 'svelte/store';
 export const WS_MESSAGE_TYPES = {
   SUBSCRIBE: 'subscribe',
   UNSUBSCRIBE: 'unsubscribe',
+  SUBSCRIBE_ACTIVITY: 'subscribe_activity',
+  UNSUBSCRIBE_ACTIVITY: 'unsubscribe_activity',
   PING: 'ping',
   PROGRESS: 'progress',
   COMPLETE: 'complete',
@@ -11,6 +13,9 @@ export const WS_MESSAGE_TYPES = {
   PONG: 'pong',
   SUBSCRIBED: 'subscribed',
   UNSUBSCRIBED: 'unsubscribed',
+  ACTIVITY: 'activity',
+  ACTIVITY_SUBSCRIBED: 'activity_subscribed',
+  ACTIVITY_UNSUBSCRIBED: 'activity_unsubscribed',
 } as const;
 
 // Message interfaces
@@ -63,13 +68,30 @@ export interface UnsubscribedMessage {
   jobId: string;
 }
 
+export interface ActivityMessage {
+  type: typeof WS_MESSAGE_TYPES.ACTIVITY;
+  contentType: string;
+  timestamp: number;
+}
+
+export interface ActivitySubscribedMessage {
+  type: typeof WS_MESSAGE_TYPES.ACTIVITY_SUBSCRIBED;
+}
+
+export interface ActivityUnsubscribedMessage {
+  type: typeof WS_MESSAGE_TYPES.ACTIVITY_UNSUBSCRIBED;
+}
+
 export type ServerMessage =
   | ProgressMessage
   | CompleteMessage
   | ErrorMessage
   | PongMessage
   | SubscribedMessage
-  | UnsubscribedMessage;
+  | UnsubscribedMessage
+  | ActivityMessage
+  | ActivitySubscribedMessage
+  | ActivityUnsubscribedMessage;
 
 // Connection state
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
@@ -88,6 +110,11 @@ export const reconnectAttempts = writable<number>(0);
 // Job progress store: jobId -> progress info
 export const jobProgress = writable<Map<string, { percent: number; stage?: string }>>(new Map());
 
+// Activity events store
+export type ActivityEvent = { contentType: string; timestamp: number };
+export const activityEvents = writable<ActivityEvent[]>([]);
+export const activityConnected = writable<boolean>(false);
+
 // Job results store: jobId -> completion/error info
 export const jobResults = writable<Map<string, {
   success: boolean;
@@ -105,11 +132,14 @@ class WebSocketClient {
   private url: string;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private maxReconnectAttempts = 10;
   private baseReconnectDelay = 1000; // 1 second
   private maxReconnectDelay = 30000; // 30 seconds
   private pingInterval = 25000; // 25 seconds
+  private jobCleanupDelay = 5 * 60 * 1000; // 5 minutes
   private subscribedJobs = new Set<string>();
+  private subscribedToActivity = false;
 
   constructor(url: string) {
     this.url = url;
@@ -145,6 +175,11 @@ class WebSocketClient {
       // Resubscribe to any jobs we were tracking
       for (const jobId of this.subscribedJobs) {
         this.sendSubscribe(jobId);
+      }
+
+      // Resubscribe to activity feed if it was active
+      if (this.subscribedToActivity) {
+        this.send({ type: WS_MESSAGE_TYPES.SUBSCRIBE_ACTIVITY });
       }
 
       // Start ping interval
@@ -202,6 +237,7 @@ class WebSocketClient {
           map.set(message.jobId, { percent: 100 });
           return new Map(map);
         });
+        this.scheduleJobCleanup(message.jobId);
         break;
 
       case WS_MESSAGE_TYPES.ERROR:
@@ -212,10 +248,26 @@ class WebSocketClient {
           });
           return new Map(map);
         });
+        this.scheduleJobCleanup(message.jobId);
         break;
 
       case WS_MESSAGE_TYPES.PONG:
         // Heartbeat received, connection is alive
+        break;
+
+      case WS_MESSAGE_TYPES.ACTIVITY:
+        activityEvents.update((events) => [
+          { contentType: message.contentType, timestamp: message.timestamp },
+          ...events.slice(0, 19),
+        ]);
+        break;
+
+      case WS_MESSAGE_TYPES.ACTIVITY_SUBSCRIBED:
+        activityConnected.set(true);
+        break;
+
+      case WS_MESSAGE_TYPES.ACTIVITY_UNSUBSCRIBED:
+        activityConnected.set(false);
         break;
 
       default:
@@ -303,6 +355,21 @@ class WebSocketClient {
     }
   }
 
+  subscribeActivity(): void {
+    this.subscribedToActivity = true;
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.send({ type: WS_MESSAGE_TYPES.SUBSCRIBE_ACTIVITY });
+    }
+  }
+
+  unsubscribeActivity(): void {
+    this.subscribedToActivity = false;
+    activityConnected.set(false);
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.send({ type: WS_MESSAGE_TYPES.UNSUBSCRIBE_ACTIVITY });
+    }
+  }
+
   disconnect(): void {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -317,10 +384,36 @@ class WebSocketClient {
     }
 
     this.subscribedJobs.clear();
+    this.subscribedToActivity = false;
+    // Clear all pending cleanup timers
+    for (const timer of this.cleanupTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.cleanupTimers.clear();
+    activityConnected.set(false);
     connectionState.set('disconnected');
   }
 
+  private scheduleJobCleanup(jobId: string): void {
+    // Cancel any existing cleanup timer for this job
+    const existing = this.cleanupTimers.get(jobId);
+    if (existing) clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+      this.cleanupTimers.delete(jobId);
+      this.clearJob(jobId);
+    }, this.jobCleanupDelay);
+    this.cleanupTimers.set(jobId, timer);
+  }
+
   clearJob(jobId: string): void {
+    // Cancel any pending cleanup timer
+    const timer = this.cleanupTimers.get(jobId);
+    if (timer) {
+      clearTimeout(timer);
+      this.cleanupTimers.delete(jobId);
+    }
+
     this.unsubscribe(jobId);
     jobProgress.update((map) => {
       map.delete(jobId);
@@ -372,6 +465,14 @@ export function unsubscribeFromJob(jobId: string): void {
 
 export function clearJobData(jobId: string): void {
   getWebSocketClient().clearJob(jobId);
+}
+
+export function subscribeActivity(): void {
+  getWebSocketClient().subscribeActivity();
+}
+
+export function unsubscribeActivity(): void {
+  getWebSocketClient().unsubscribeActivity();
 }
 
 // Helper to get progress for a specific job

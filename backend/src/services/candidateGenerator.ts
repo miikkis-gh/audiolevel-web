@@ -8,7 +8,7 @@
  */
 
 import { createChildLogger } from '../utils/logger';
-import type { AnalysisResult, ContentType } from '../types/analysis';
+import type { AnalysisMetrics, AnalysisResult, ContentType } from '../types/analysis';
 import type {
   ProcessingCandidate,
   FilterConfig,
@@ -67,7 +67,7 @@ export function generateCandidates(analysis: AnalysisResult): CandidateGeneratio
 /**
  * Build configuration for conservative processing
  */
-function buildConservativeConfig(contentType: ContentType, metrics: any): FilterConfig {
+function buildConservativeConfig(contentType: ContentType, metrics: AnalysisMetrics): FilterConfig {
   const isSpeech = contentType === 'speech' || contentType === 'podcast_mixed';
 
   return {
@@ -97,7 +97,7 @@ function buildConservativeConfig(contentType: ContentType, metrics: any): Filter
 function buildBalancedConfig(
   contentType: ContentType,
   problems: AnalysisResult['problems'],
-  metrics: any
+  metrics: AnalysisMetrics
 ): FilterConfig {
   const isSpeech = contentType === 'speech' || contentType === 'podcast_mixed';
   const isMusic = contentType === 'music';
@@ -161,7 +161,7 @@ function buildBalancedConfig(
 function buildAggressiveConfig(
   contentType: ContentType,
   problems: AnalysisResult['problems'],
-  metrics: any
+  metrics: AnalysisMetrics
 ): FilterConfig {
   const isSpeech = contentType === 'speech' || contentType === 'podcast_mixed';
   const isMusic = contentType === 'music';
@@ -208,7 +208,7 @@ function buildAggressiveConfig(
 function buildContentOptimizedConfig(
   contentType: ContentType,
   problems: AnalysisResult['problems'],
-  metrics: any
+  metrics: AnalysisMetrics
 ): FilterConfig {
   switch (contentType) {
     case 'speech':
@@ -228,7 +228,7 @@ function buildContentOptimizedConfig(
  */
 function buildSpeechOptimizedConfig(
   problems: AnalysisResult['problems'],
-  metrics: any
+  metrics: AnalysisMetrics
 ): FilterConfig {
   return {
     highpassFreq: 80,
@@ -256,7 +256,7 @@ function buildSpeechOptimizedConfig(
  */
 function buildMusicOptimizedConfig(
   problems: AnalysisResult['problems'],
-  metrics: any
+  metrics: AnalysisMetrics
 ): FilterConfig {
   const needsCompression = metrics.loudnessRange > 20;
 
@@ -286,7 +286,7 @@ function buildMusicOptimizedConfig(
  */
 function buildPodcastMixedConfig(
   problems: AnalysisResult['problems'],
-  metrics: any
+  metrics: AnalysisMetrics
 ): FilterConfig {
   return {
     highpassFreq: 60, // Compromise

@@ -1,24 +1,17 @@
-import { describe, expect, test, beforeEach, afterAll } from 'bun:test';
-import { existsSync, rmSync } from 'fs';
+import { describe, expect, test, beforeEach } from 'bun:test';
 import {
   extractFingerprint,
-  computeDistance,
   findSimilar,
   saveOutcome,
-  loadHistory,
   clearHistory,
   loadStats,
   recordPredictionResult,
 } from '../services/processingEstimator';
 import type { AnalysisMetrics } from '../types/analysis';
 import type { ProcessingOutcome, EstimatorConfig } from '../types/estimator';
-
-const TEST_HISTORY_PATH = 'data/integration-test-history.json';
-const TEST_STATS_PATH = 'data/integration-test-stats.json';
+import { getRedisClient } from '../services/redis';
 
 const TEST_CONFIG: EstimatorConfig = {
-  historyPath: TEST_HISTORY_PATH,
-  statsPath: TEST_STATS_PATH,
   highThreshold: 0.05,
   moderateThreshold: 0.15,
   maxHistory: 100,
@@ -26,17 +19,13 @@ const TEST_CONFIG: EstimatorConfig = {
 };
 
 describe('Estimator Integration', () => {
-  beforeEach(() => {
-    if (existsSync(TEST_HISTORY_PATH)) rmSync(TEST_HISTORY_PATH);
-    if (existsSync(TEST_STATS_PATH)) rmSync(TEST_STATS_PATH);
+  beforeEach(async () => {
+    await clearHistory();
+    const redis = getRedisClient();
+    await redis.del('estimator:stats');
   });
 
-  afterAll(() => {
-    if (existsSync(TEST_HISTORY_PATH)) rmSync(TEST_HISTORY_PATH);
-    if (existsSync(TEST_STATS_PATH)) rmSync(TEST_STATS_PATH);
-  });
-
-  test('full workflow: process similar files with estimation', () => {
+  test('full workflow: process similar files with estimation', async () => {
     // Simulate first file processing (no history)
     const metrics1: AnalysisMetrics = {
       channels: 2,
@@ -65,9 +54,9 @@ describe('Estimator Integration', () => {
     };
 
     const fp1 = extractFingerprint(metrics1);
-    
+
     // No prediction for first file
-    const prediction1 = findSimilar(fp1, TEST_CONFIG);
+    const prediction1 = await findSimilar(fp1, TEST_CONFIG);
     expect(prediction1).toBeNull();
 
     // Save outcome (simulating processing result)
@@ -78,7 +67,7 @@ describe('Estimator Integration', () => {
       contentType: 'speech',
       timestamp: Date.now(),
     };
-    saveOutcome(outcome1, TEST_HISTORY_PATH);
+    await saveOutcome(outcome1);
 
     // Second similar file should get high confidence prediction
     const metrics2: AnalysisMetrics = {
@@ -89,21 +78,21 @@ describe('Estimator Integration', () => {
     };
 
     const fp2 = extractFingerprint(metrics2);
-    const prediction2 = findSimilar(fp2, TEST_CONFIG);
+    const prediction2 = await findSimilar(fp2, TEST_CONFIG);
 
     expect(prediction2).not.toBeNull();
     expect(prediction2!.confidence).toBe('high');
     expect(prediction2!.predictedWinner).toBe('conservative-speech');
 
     // Record hit
-    recordPredictionResult('high', true, TEST_STATS_PATH);
+    await recordPredictionResult('high', true);
 
-    const stats = loadStats(TEST_STATS_PATH);
+    const stats = await loadStats();
     expect(stats.totalPredictions).toBe(1);
     expect(stats.highConfidenceHits).toBe(1);
   });
 
-  test('different content produces no match', () => {
+  test('different content produces no match', async () => {
     // Save speech outcome
     const speechOutcome: ProcessingOutcome = {
       fingerprint: {
@@ -118,7 +107,7 @@ describe('Estimator Integration', () => {
       contentType: 'speech',
       timestamp: Date.now(),
     };
-    saveOutcome(speechOutcome, TEST_HISTORY_PATH);
+    await saveOutcome(speechOutcome);
 
     // Query with music-like fingerprint
     const musicFp = {
@@ -129,7 +118,7 @@ describe('Estimator Integration', () => {
       spectralFlatness: 0.15,
     };
 
-    const prediction = findSimilar(musicFp, TEST_CONFIG);
+    const prediction = await findSimilar(musicFp, TEST_CONFIG);
     expect(prediction).toBeNull();
   });
 });

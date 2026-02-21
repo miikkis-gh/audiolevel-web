@@ -142,7 +142,7 @@ export async function runIntelligentProcessing(
 
     if (estimatorConfig.enabled) {
       fingerprint = extractFingerprint(analysis.metrics);
-      prediction = findSimilar(fingerprint, estimatorConfig);
+      prediction = await findSimilar(fingerprint, estimatorConfig);
 
       if (prediction) {
         processorLog.info({
@@ -263,7 +263,7 @@ export async function runIntelligentProcessing(
         predictionCorrect: prediction ? prediction.predictedWinner === evaluation.winnerId : undefined,
       };
 
-      saveOutcome(outcome, estimatorConfig.historyPath, estimatorConfig.maxHistory);
+      await saveOutcome(outcome, estimatorConfig.maxHistory);
 
       // Log and record prediction result if we made a prediction
       if (prediction) {
@@ -273,10 +273,9 @@ export async function runIntelligentProcessing(
           prediction.confidence,
           prediction.distance
         );
-        recordPredictionResult(
+        await recordPredictionResult(
           prediction.confidence,
           prediction.predictedWinner === evaluation.winnerId,
-          estimatorConfig.statsPath
         );
       }
     }
@@ -401,17 +400,3 @@ function buildProcessingReport(
   };
 }
 
-/**
- * Check if intelligent processing should be used for a file
- *
- * Can be used to conditionally enable intelligent processing
- * based on file characteristics or user preferences.
- */
-export function shouldUseIntelligentProcessing(
-  _inputPath: string,
-  _useIntelligent: boolean = true
-): boolean {
-  // For now, always use intelligent processing when enabled
-  // Could add logic to skip for very short files, etc.
-  return _useIntelligent;
-}

@@ -1,18 +1,17 @@
 <script lang="ts">
-  import { fetchActivityStats, fetchGenreStats, type ActivityStats, type ActivityEvent, type GenreStats } from '../../../stores/api';
-
-  interface Props {
-    wsUrl: string;
-  }
-
-  let { wsUrl }: Props = $props();
+  import { fetchActivityStats, fetchGenreStats, type ActivityStats, type GenreStats } from '../../../stores/api';
+  import {
+    subscribeActivity,
+    unsubscribeActivity,
+    activityEvents,
+    activityConnected,
+    type ActivityEvent,
+  } from '../../../stores/websocket';
 
   let stats = $state<ActivityStats | null>(null);
   let genreStats = $state<GenreStats | null>(null);
   let recentActivity = $state<ActivityEvent[]>([]);
   let expanded = $state(false);
-  let ws: WebSocket | null = null;
-  let connected = $state(false);
 
   // Fetch initial stats
   async function loadStats() {
@@ -29,73 +28,33 @@
     }
   }
 
-  // Connect to WebSocket for live updates
-  function connectWebSocket() {
-    if (ws) return;
-
-    try {
-      ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        connected = true;
-        // Subscribe to activity feed
-        ws?.send(JSON.stringify({ type: 'subscribe_activity' }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'activity') {
-            // Add new activity to the front
-            const newEvent: ActivityEvent = {
-              contentType: msg.contentType,
-              timestamp: msg.timestamp,
-            };
-            recentActivity = [newEvent, ...recentActivity.slice(0, 19)];
-
-            // Update today's count
-            if (stats) {
-              stats = { ...stats, todayFiles: stats.todayFiles + 1 };
-            }
-          }
-        } catch {
-          // Ignore parse errors
+  // React to live activity events from the shared WebSocket
+  $effect(() => {
+    const events = $activityEvents;
+    if (events.length > 0) {
+      const latest = events[0];
+      // Merge live events into our local activity list (deduplicate by timestamp)
+      const existing = recentActivity.find(e => e.timestamp === latest.timestamp && e.contentType === latest.contentType);
+      if (!existing) {
+        recentActivity = [latest, ...recentActivity.slice(0, 19)];
+        // Update today's count
+        if (stats) {
+          stats = { ...stats, todayFiles: stats.todayFiles + 1 };
         }
-      };
-
-      ws.onclose = () => {
-        connected = false;
-        ws = null;
-        // Reconnect after delay
-        setTimeout(connectWebSocket, 5000);
-      };
-
-      ws.onerror = () => {
-        ws?.close();
-      };
-    } catch {
-      // Ignore connection errors
+      }
     }
-  }
-
-  function disconnect() {
-    if (ws) {
-      ws.send(JSON.stringify({ type: 'unsubscribe_activity' }));
-      ws.close();
-      ws = null;
-    }
-  }
+  });
 
   $effect(() => {
     loadStats();
-    connectWebSocket();
+    subscribeActivity();
 
     // Refresh stats periodically
     const interval = setInterval(loadStats, 60000);
 
     return () => {
       clearInterval(interval);
-      disconnect();
+      unsubscribeActivity();
     };
   });
 
@@ -147,7 +106,7 @@
           Loading...
         {/if}
       </span>
-      {#if connected}
+      {#if $activityConnected}
         <span class="live-dot" title="Live updates active"></span>
       {/if}
     </div>
