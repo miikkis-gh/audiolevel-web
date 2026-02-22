@@ -164,47 +164,48 @@ export async function runCommand(
       reject(new Error(`Process timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
-    // Read stdout
-    (async () => {
-      const reader = proc.stdout.getReader();
+    // Helper to drain a readable stream with guaranteed reader cleanup
+    async function drainStream(
+      stream: ReadableStream<Uint8Array>,
+      onChunk: (chunk: string) => void,
+    ): Promise<void> {
+      const reader = stream.getReader();
       const decoder = new TextDecoder();
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value);
-          stdout += chunk;
-          onOutput?.(chunk);
+          onChunk(chunk);
         }
       } catch {
         // Ignore read errors on killed process
+      } finally {
+        reader.releaseLock();
       }
-    })();
+    }
 
-    // Read stderr
-    (async () => {
-      const reader = proc.stderr.getReader();
-      const decoder = new TextDecoder();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value);
-          stderr += chunk;
-          onOutput?.(chunk);
-        }
-      } catch {
-        // Ignore read errors on killed process
-      }
-    })();
+    // Read stdout and stderr in parallel, awaiting both before resolving
+    const stdoutDone = drainStream(proc.stdout, (chunk) => {
+      stdout += chunk;
+      onOutput?.(chunk);
+    });
 
-    proc.exited.then((exitCode) => {
+    const stderrDone = drainStream(proc.stderr, (chunk) => {
+      stderr += chunk;
+      onOutput?.(chunk);
+    });
+
+    proc.exited.then(async (exitCode) => {
       clearTimeout(timeout);
+      // Wait for streams to fully drain before resolving
+      await Promise.all([stdoutDone, stderrDone]);
       if (!killed) {
         resolve({ stdout, stderr, exitCode });
       }
-    }).catch((err) => {
+    }).catch(async (err) => {
       clearTimeout(timeout);
+      await Promise.all([stdoutDone, stderrDone]).catch(() => {});
       if (!killed) {
         reject(err);
       }

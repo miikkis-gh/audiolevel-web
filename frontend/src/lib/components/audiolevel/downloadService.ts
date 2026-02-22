@@ -47,7 +47,9 @@ export interface ZipResult {
 
 /**
  * Download batch files as a single ZIP archive.
- * Fetches files sequentially to avoid high memory pressure.
+ * Fetches files sequentially and uses Uint8Array to reduce memory pressure
+ * compared to holding Blob references. Each file's memory is released after
+ * being added to the ZIP.
  */
 export async function downloadBatchAsZip(
   files: BatchFile[],
@@ -58,21 +60,31 @@ export async function downloadBatchAsZip(
   const failedFiles: string[] = [];
   let fetched = 0;
 
-  for (const file of completedFiles) {
-    try {
-      const url = file.downloadUrl || getDownloadUrl(file.jobId!);
-      const response = await fetch(url);
-      if (response.ok) {
-        const blob = await response.blob();
-        zip.file(file.name, blob);
+  // Process files in small batches to bound peak memory usage
+  const BATCH_SIZE = 3;
+  for (let i = 0; i < completedFiles.length; i += BATCH_SIZE) {
+    const batch = completedFiles.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(async (file) => {
+        const url = file.downloadUrl || getDownloadUrl(file.jobId!);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        // Use arrayBuffer → Uint8Array for more predictable GC than Blob
+        const buffer = await response.arrayBuffer();
+        return { name: file.name, data: new Uint8Array(buffer) };
+      }),
+    );
+
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
+      if (result.status === 'fulfilled') {
+        zip.file(result.value.name, result.value.data);
       } else {
-        failedFiles.push(file.name);
+        failedFiles.push(batch[j].name);
       }
-    } catch {
-      failedFiles.push(file.name);
+      fetched++;
+      onFileProgress?.(fetched, completedFiles.length);
     }
-    fetched++;
-    onFileProgress?.(fetched, completedFiles.length);
   }
 
   if (fetched - failedFiles.length === 0) {

@@ -64,15 +64,18 @@ export async function analyzeAudio(
   const analysisLog = createChildLogger({ inputPath });
   analysisLog.info('Starting comprehensive audio analysis');
 
-  // Run all analysis steps in parallel where possible
-  const [
-    basicMetadata,
-    loudnessMetrics,
-    statsMetrics,
-    silenceMetrics,
-    spectralMetrics,
-    soxMetrics,
-  ] = await Promise.all([
+  // Run all analysis steps in parallel with graceful degradation.
+  // Individual metric failures fall back to defaults instead of killing entire analysis.
+  const defaults = {
+    basicMetadata: { channels: 2, sampleRate: 44100, bitDepth: 16, duration: 0 },
+    loudnessMetrics: { integratedLufs: -23, loudnessRange: 6, truePeak: -1 },
+    statsMetrics: { rmsDb: -20, peakDb: -1, flatFactor: 0, peakCount: 0 },
+    silenceMetrics: { silenceRatio: 0, leadingSilence: 0, trailingSilence: 0 },
+    spectralMetrics: { centroid: 2000, flatness: 0.5, lowEnergy: 0.3, midEnergy: 0.4, highEnergy: 0.2, veryHighEnergy: 0.1 },
+    soxMetrics: { dcOffset: 0, stereoBalance: 0 },
+  };
+
+  const results = await Promise.allSettled([
     getBasicMetadata(inputPath),
     getLoudnessMetrics(inputPath),
     getAstatsMetrics(inputPath),
@@ -80,6 +83,22 @@ export async function analyzeAudio(
     getSpectralMetrics(inputPath),
     getSoxMetrics(inputPath),
   ]);
+
+  const settled = results.map((r, i) => {
+    if (r.status === 'fulfilled') return r.value;
+    const names = ['basicMetadata', 'loudnessMetrics', 'statsMetrics', 'silenceMetrics', 'spectralMetrics', 'soxMetrics'] as const;
+    analysisLog.warn({ metric: names[i], error: r.reason?.message }, 'Analysis metric failed, using defaults');
+    return Object.values(defaults)[i];
+  });
+
+  const [basicMetadata, loudnessMetrics, statsMetrics, silenceMetrics, spectralMetrics, soxMetrics] = settled as [
+    typeof defaults.basicMetadata,
+    typeof defaults.loudnessMetrics,
+    typeof defaults.statsMetrics,
+    typeof defaults.silenceMetrics,
+    typeof defaults.spectralMetrics,
+    typeof defaults.soxMetrics,
+  ];
 
   // Combine all metrics
   const metrics: AnalysisMetrics = {

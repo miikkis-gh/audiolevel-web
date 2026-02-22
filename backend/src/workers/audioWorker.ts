@@ -7,6 +7,7 @@ import { AppError } from '../middleware/errorHandler';
 import { env } from '../config/env';
 import { logger, createChildLogger } from '../utils/logger';
 import { emitJobProgress, emitJobComplete, emitJobError } from '../websocket/events';
+import { recoverOrphanedJobs } from '../services/queue';
 import type { AudioJobData, AudioJobResult } from '../services/queue';
 
 let audioWorker: Worker<AudioJobData, AudioJobResult> | null = null;
@@ -182,6 +183,16 @@ export async function startAudioWorker(): Promise<Worker<AudioJobData, AudioJobR
   const deps = await verifyDependencies();
   if (!deps.ffmpeg || !deps.ffprobe) {
     logger.error('FFmpeg or FFprobe not found. Audio processing will fail.');
+  }
+
+  // Recover any orphaned jobs left behind by a previous crash
+  try {
+    const recovered = await recoverOrphanedJobs();
+    if (recovered > 0) {
+      logger.info({ recovered }, 'Recovered orphaned jobs from previous crash');
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Failed to recover orphaned jobs (non-fatal)');
   }
 
   const connection = getRedisClient();

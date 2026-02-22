@@ -164,6 +164,33 @@ initializeServices().catch((err) => {
   process.exit(1);
 });
 
+/**
+ * Validate WebSocket origin against allowed origins.
+ * Reuses the same allowedOrigins list as the CORS middleware.
+ */
+function isWebSocketOriginAllowed(req: Request): boolean {
+  const origin = req.headers.get('origin');
+
+  // Allow connections with no origin (non-browser clients, same-origin)
+  if (!origin) return true;
+
+  // Allow localhost in any environment
+  if (origin.includes('localhost')) return true;
+
+  // If whitelist is configured, check against it
+  if (allowedOrigins.length > 0) {
+    return allowedOrigins.includes(origin);
+  }
+
+  // In production, reject unknown origins
+  if (env.NODE_ENV === 'production') {
+    return false;
+  }
+
+  // Development fallback: allow any origin
+  return true;
+}
+
 // Export server configuration with WebSocket support
 export default {
   port: env.PORT,
@@ -171,6 +198,12 @@ export default {
     // Handle WebSocket upgrade
     const url = new URL(req.url);
     if (url.pathname === '/ws') {
+      // Validate origin before accepting the upgrade
+      if (!isWebSocketOriginAllowed(req)) {
+        logger.warn({ origin: req.headers.get('origin') }, 'WebSocket upgrade rejected: origin not allowed');
+        return new Response('Forbidden', { status: 403 });
+      }
+
       const upgraded = server.upgrade(req, {
         data: {
           sessionId: '',

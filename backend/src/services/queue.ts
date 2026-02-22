@@ -320,6 +320,42 @@ export async function canAcceptJob(fileSize?: number): Promise<{
 }
 
 /**
+ * Recover orphaned active jobs left behind after a crash.
+ * Moves stale active jobs back to waiting state so they get reprocessed.
+ * Should be called once on startup before the worker begins processing.
+ */
+export async function recoverOrphanedJobs(): Promise<number> {
+  const queue = getAudioQueue();
+  const activeJobs = await queue.getJobs(['active']);
+
+  if (activeJobs.length === 0) {
+    return 0;
+  }
+
+  let recovered = 0;
+  for (const job of activeJobs) {
+    try {
+      // Move the stuck job back to waiting by failing it so BullMQ retries it
+      await job.moveToFailed(
+        new Error('Job was orphaned after server restart'),
+        '0',
+        false, // don't fetch next — worker isn't processing yet
+      );
+      logger.info({ jobId: job.data.jobId, attempts: job.attemptsMade }, 'Recovered orphaned job');
+      recovered++;
+    } catch (err) {
+      logger.warn({ jobId: job.data.jobId, err }, 'Failed to recover orphaned job');
+    }
+  }
+
+  if (recovered > 0) {
+    logger.info({ recovered, total: activeJobs.length }, 'Orphaned job recovery complete');
+  }
+
+  return recovered;
+}
+
+/**
  * Pause queue processing (for maintenance/emergency)
  */
 export async function pauseQueue(): Promise<void> {
