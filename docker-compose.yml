@@ -31,6 +31,7 @@ services:
       - FILE_RETENTION_MINUTES=15
       - MAX_CONCURRENT_JOBS=4
       - PROCESSING_TIMEOUT_MS=300000
+      - CORS_ORIGINS=https://audiolevel.miikkis.fi
       - LOG_LEVEL=info
       - DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
     volumes:

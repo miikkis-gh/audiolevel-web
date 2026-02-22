@@ -75,14 +75,24 @@ const allowedOrigins = env.CORS_ORIGINS
 app.use(
   '*',
   cors({
-    origin: (origin) => {
+    origin: (origin, c) => {
       // Allow localhost for development
       if (origin?.includes('localhost')) return origin;
       // If whitelist is configured, only allow those origins
       if (allowedOrigins.length > 0) {
         return allowedOrigins.includes(origin || '') ? origin : null;
       }
-      // In production, require explicit CORS_ORIGINS configuration
+      // Same-origin check: allow if origin hostname matches the Host header
+      if (origin) {
+        const host = c.req.header('host');
+        if (host) {
+          try {
+            const originHost = new URL(origin).hostname;
+            if (originHost === host || originHost === host.split(':')[0]) return origin;
+          } catch {}
+        }
+      }
+      // In production without CORS_ORIGINS, reject unknown origins
       if (env.NODE_ENV === 'production') {
         return null;
       }
@@ -182,7 +192,16 @@ function isWebSocketOriginAllowed(req: Request): boolean {
     return allowedOrigins.includes(origin);
   }
 
-  // In production, reject unknown origins
+  // Same-origin check: allow if origin hostname matches the Host header
+  const host = req.headers.get('host');
+  if (host) {
+    try {
+      const originHost = new URL(origin).hostname;
+      if (originHost === host || originHost === host.split(':')[0]) return true;
+    } catch {}
+  }
+
+  // In production without CORS_ORIGINS, reject unknown origins
   if (env.NODE_ENV === 'production') {
     return false;
   }
