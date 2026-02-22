@@ -20,7 +20,7 @@
   } from './constants';
   import { getStageLabel, getLayout, getPositions, truncName } from './helpers';
   import { buildReportFromResult, buildBatchReportFromResult, buildReportFromBatchReport } from './reportBuilder';
-  import { triggerDownload, downloadBatchFilesStaggered, downloadBatchAsZip } from './downloadService';
+  import { triggerDownload, downloadBatchFilesStaggered, downloadBatchAsZip, type ZipResult } from './downloadService';
   import { submitFileRating } from './ratingService';
   import { uploadFile, getDownloadUrl, getJobStatus, fetchRateLimitStatus, type ApiError, type JobResult, type RateLimitStatus, type GenreGuess } from '../../../stores/api';
   import {
@@ -578,25 +578,40 @@
     }
   }
 
+  let zipProgress = $state('');
+
   async function handleBatchDownloadZip() {
     downloadDropdownOpen = false;
     zipping = true;
+    zipProgress = '';
 
     try {
-      await downloadBatchAsZip(batchFiles);
+      const result = await downloadBatchAsZip(batchFiles, (fetched, total) => {
+        zipProgress = `${fetched}/${total}`;
+      });
+
+      if (result.failedFiles.length > 0) {
+        const names = result.failedFiles.join(', ');
+        setError(
+          `ZIP created with ${result.addedCount} files — ${result.failedFiles.length} failed`,
+          `Missing: ${names}`,
+          8000,
+        );
+      }
 
       // Show rating toast after ZIP download using first file's report
       const completedFiles = batchFiles.filter((f) => f.jobId && f.fileState === 'complete');
       if (completedFiles.length > 0) {
         const firstFile = completedFiles[0];
         const reportData = firstFile.report ? buildReportFromBatchReport(firstFile.report) : singleReport;
-        showRatingToastAfterDownload(firstFile.jobId!, `${completedFiles.length} files (ZIP)`, reportData);
+        showRatingToastAfterDownload(firstFile.jobId!, `${result.addedCount} files (ZIP)`, reportData);
       }
     } catch (err) {
       console.error('Failed to create ZIP:', err);
       setError('Failed to create ZIP file', 'Try downloading files individually', 3000);
     } finally {
       zipping = false;
+      zipProgress = '';
     }
   }
 
@@ -863,7 +878,7 @@
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              {zipping ? 'Creating ZIP...' : 'Download All'}
+              {zipping ? (zipProgress ? `Zipping ${zipProgress}...` : 'Creating ZIP...') : 'Download All'}
             </button>
             <button
               class="download-btn dropdown-toggle"

@@ -40,26 +40,49 @@ export function downloadBatchFilesStaggered(
   });
 }
 
+export interface ZipResult {
+  addedCount: number;
+  failedFiles: string[];
+}
+
 /**
- * Download batch files as a single ZIP archive
+ * Download batch files as a single ZIP archive.
+ * Fetches files sequentially to avoid high memory pressure.
  */
-export async function downloadBatchAsZip(files: BatchFile[]): Promise<void> {
+export async function downloadBatchAsZip(
+  files: BatchFile[],
+  onFileProgress?: (fetched: number, total: number) => void,
+): Promise<ZipResult> {
   const zip = new JSZip();
   const completedFiles = files.filter((f) => f.jobId && f.fileState === 'complete');
+  const failedFiles: string[] = [];
+  let fetched = 0;
 
-  await Promise.all(
-    completedFiles.map(async (file) => {
+  for (const file of completedFiles) {
+    try {
       const url = file.downloadUrl || getDownloadUrl(file.jobId!);
       const response = await fetch(url);
       if (response.ok) {
         const blob = await response.blob();
         zip.file(file.name, blob);
+      } else {
+        failedFiles.push(file.name);
       }
-    })
-  );
+    } catch {
+      failedFiles.push(file.name);
+    }
+    fetched++;
+    onFileProgress?.(fetched, completedFiles.length);
+  }
+
+  if (fetched - failedFiles.length === 0) {
+    throw new Error('All file downloads failed');
+  }
 
   const zipBlob = await zip.generateAsync({ type: 'blob' });
   const zipUrl = URL.createObjectURL(zipBlob);
   triggerDownload(zipUrl, 'audiolevel-processed.zip');
   URL.revokeObjectURL(zipUrl);
+
+  return { addedCount: fetched - failedFiles.length, failedFiles };
 }
