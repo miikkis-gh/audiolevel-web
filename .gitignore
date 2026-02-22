@@ -62,6 +62,7 @@ audiolevel_coolify.md
 setup-summary.md
 
 # Internal documentation
+docs/
 CLAUDE.md
 MILESTONES.md
 MASTERING_UPGRADE_INSTRUCTIONS.md
