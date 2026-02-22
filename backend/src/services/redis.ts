@@ -38,7 +38,12 @@ export async function closeRedis(): Promise<void> {
 export async function checkRedisHealth(): Promise<boolean> {
   try {
     const client = getRedisClient();
-    const result = await client.ping();
+    const result = await Promise.race([
+      client.ping(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Redis ping timeout')), 5000)
+      ),
+    ]);
     return result === 'PONG';
   } catch {
     return false;

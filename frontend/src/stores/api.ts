@@ -1,5 +1,11 @@
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+/** Default timeout for API requests (10 seconds) */
+const DEFAULT_TIMEOUT_MS = 10000;
+
+/** Upload timeout — longer since files can be large (5 minutes) */
+const UPLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+
 export interface UploadResponse {
   jobId: string;
   status: string;
@@ -132,7 +138,9 @@ function getDefaultErrorMessage(status: number): string {
 }
 
 export async function fetchRateLimitStatus(): Promise<RateLimitStatus> {
-  const response = await fetch(`${API_URL}/api/upload/rate-limit`);
+  const response = await fetch(`${API_URL}/api/upload/rate-limit`, {
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch rate limit status');
   }
@@ -140,7 +148,9 @@ export async function fetchRateLimitStatus(): Promise<RateLimitStatus> {
 }
 
 export async function fetchQueueStatus(): Promise<QueueStatus> {
-  const response = await fetch(`${API_URL}/api/upload/queue-status`);
+  const response = await fetch(`${API_URL}/api/upload/queue-status`, {
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch queue status');
   }
@@ -164,6 +174,7 @@ export async function uploadFile(file: File): Promise<UploadResponse> {
   const response = await fetch(`${API_URL}/api/upload`, {
     method: 'POST',
     body: formData,
+    signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -175,7 +186,9 @@ export async function uploadFile(file: File): Promise<UploadResponse> {
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
-  const response = await fetch(`${API_URL}/api/upload/job/${jobId}`);
+  const response = await fetch(`${API_URL}/api/upload/job/${jobId}`, {
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error('Failed to get job status');
   }
@@ -218,6 +231,7 @@ export async function submitRating(payload: RatingPayload): Promise<void> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     });
 
     // Fire-and-forget: don't throw on failure, just log
@@ -251,7 +265,9 @@ export interface ActivityStats {
 }
 
 export async function fetchActivityStats(): Promise<ActivityStats> {
-  const response = await fetch(`${API_URL}/api/stats`);
+  const response = await fetch(`${API_URL}/api/stats`, {
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch activity stats');
   }
@@ -283,7 +299,9 @@ export const GENRE_SUBCATEGORIES: Record<string, string[]> = {
 };
 
 export async function fetchGenreStats(): Promise<GenreStats> {
-  const response = await fetch(`${API_URL}/api/stats/genres`);
+  const response = await fetch(`${API_URL}/api/stats/genres`, {
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error('Failed to fetch genre stats');
   }
@@ -303,6 +321,7 @@ export async function confirmGenre(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ jobId, broad, detailed }),
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     });
 
     if (!response.ok) {

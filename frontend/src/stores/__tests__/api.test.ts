@@ -33,10 +33,10 @@ describe('API Store', () => {
       const file = new File(['audio content'], 'test.mp3', { type: 'audio/mpeg' });
       const result = await uploadFile(file);
 
-      expect(fetch).toHaveBeenCalledWith('/api/upload', {
+      expect(fetch).toHaveBeenCalledWith('/api/upload', expect.objectContaining({
         method: 'POST',
         body: expect.any(FormData),
-      });
+      }));
 
       // Verify FormData contents
       const call = vi.mocked(fetch).mock.calls[0];
@@ -126,7 +126,9 @@ describe('API Store', () => {
 
       const result = await getJobStatus('job-123');
 
-      expect(fetch).toHaveBeenCalledWith('/api/upload/job/job-123');
+      expect(fetch).toHaveBeenCalledWith('/api/upload/job/job-123', expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }));
       expect(result).toEqual(mockStatus);
     });
 
@@ -182,7 +184,9 @@ describe('API Store', () => {
 
       const result = await fetchRateLimitStatus();
 
-      expect(fetch).toHaveBeenCalledWith('/api/upload/rate-limit');
+      expect(fetch).toHaveBeenCalledWith('/api/upload/rate-limit', expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }));
       expect(result).toEqual(mockStatus);
     });
 
@@ -213,7 +217,9 @@ describe('API Store', () => {
 
       const result = await fetchQueueStatus();
 
-      expect(fetch).toHaveBeenCalledWith('/api/upload/queue-status');
+      expect(fetch).toHaveBeenCalledWith('/api/upload/queue-status', expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }));
       expect(result).toEqual(mockStatus);
     });
 

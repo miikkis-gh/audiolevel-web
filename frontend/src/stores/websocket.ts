@@ -213,15 +213,18 @@ class WebSocketClient {
 
   private handleMessage(message: ServerMessage): void {
     switch (message.type) {
-      case WS_MESSAGE_TYPES.PROGRESS:
+      case WS_MESSAGE_TYPES.PROGRESS: {
+        // Clamp progress to valid range to prevent broken UI state
+        const percent = Math.max(0, Math.min(100, Number(message.percent) || 0));
         jobProgress.update((map) => {
           map.set(message.jobId, {
-            percent: message.percent,
+            percent,
             stage: message.stage,
           });
           return new Map(map);
         });
         break;
+      }
 
       case WS_MESSAGE_TYPES.COMPLETE:
         jobResults.update((map) => {

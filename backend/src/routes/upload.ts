@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { join } from 'path';
-import { mkdir } from 'fs/promises';
+import { mkdir, unlink } from 'fs/promises';
 import { fileTypeFromBuffer } from 'file-type';
 import { ALLOWED_MIME_TYPES } from '../schemas/upload';
 import { addAudioJob, getJobStatus, canAcceptJob, getQueueStatus } from '../services/queue';
@@ -133,8 +133,13 @@ upload.post('/', async (c) => {
 
   if (!isValidMime) {
     // Clean up invalid file and release reserved disk space
-    await Bun.write(inputPath, '').catch(() => {});
-    try { await import('fs/promises').then(fs => fs.unlink(inputPath)); } catch {}
+    try {
+      await unlink(inputPath);
+    } catch (unlinkErr) {
+      if ((unlinkErr as NodeJS.ErrnoException).code !== 'ENOENT') {
+        logger.warn({ err: unlinkErr, inputPath }, 'Failed to delete invalid upload');
+      }
+    }
     releaseDiskSpace(file.size);
     logger.warn({ detectedMime: fileType?.mime, ext }, 'Rejected file with invalid MIME type');
     throw new AppError(400, 'Invalid audio file format', 'INVALID_FORMAT');
@@ -341,6 +346,7 @@ upload.post('/rating', async (c) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ embeds: [embed] }),
+      signal: AbortSignal.timeout(5000),
     }).catch((err) => {
       logger.warn({ err, jobId }, 'Failed to send rating to Discord');
     });

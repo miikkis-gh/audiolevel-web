@@ -22,6 +22,9 @@ interface DiscordEmbed {
   timestamp?: string;
 }
 
+/** Timeout for Discord webhook requests (5 seconds) */
+const WEBHOOK_TIMEOUT_MS = 5000;
+
 /**
  * Send a Discord embed notification
  */
@@ -36,6 +39,7 @@ async function sendEmbed(embed: DiscordEmbed): Promise<void> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ embeds: [embed] }),
+      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
     });
   } catch (err) {
     logger.warn({ err }, 'Failed to send Discord notification');
@@ -309,6 +313,7 @@ export async function postActivityReport(): Promise<void> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ embeds: [embed] }),
+      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
     });
 
     logger.info('Posted activity report to Discord');
